@@ -16,7 +16,7 @@ function App() {
       if (gameEngine.selectedBuilding) {
         setStatus({
           building: gameEngine.selectedBuilding.data.name,
-          inventory: gameEngine.selectedBuilding.inventory
+          inventory: gameEngine.selectedBuilding.inventory,
         });
       } else {
         setStatus({ building: null, inventory: {} });
@@ -31,60 +31,64 @@ function App() {
   };
 
   return (
-    <div style={{ 
-      background: '#1a1a1a', 
-      color: '#eee', 
-      height: '100vh', 
-      display: 'flex',
-      overflow: 'hidden'
-    }}>
-      {/* Sidebar */}
-      <div style={{ 
-        width: '250px', 
-        background: '#2a2a2a', 
-        padding: '20px', 
-        borderRight: '1px solid #444',
+    <div
+      style={{
+        background: '#1a1a1a',
+        color: '#eee',
+        height: '100vh',
         display: 'flex',
-        flexDirection: 'column',
-        gap: '20px'
-      }}>
+        overflow: 'hidden',
+      }}
+    >
+      {/* Sidebar */}
+      <div
+        style={{
+          width: '250px',
+          background: '#2a2a2a',
+          padding: '20px',
+          borderRight: '1px solid #444',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px',
+        }}
+      >
         <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Gridworks</h1>
-        
+
         <div>
           <h3 style={{ marginBottom: '10px' }}>Build</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button 
+            <button
               onClick={() => setSelectedType('smelter_basic')}
-              style={{ 
-                padding: '10px', 
+              style={{
+                padding: '10px',
                 background: selectedType === 'smelter_basic' ? '#444' : '#333',
                 color: 'white',
                 border: '1px solid #666',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               Basic Smelter
             </button>
-            <button 
+            <button
               onClick={() => setSelectedType('gatherer_basic')}
-              style={{ 
-                padding: '10px', 
+              style={{
+                padding: '10px',
                 background: selectedType === 'gatherer_basic' ? '#444' : '#333',
                 color: 'white',
                 border: '1px solid #666',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               Basic Gatherer
             </button>
-            <button 
+            <button
               onClick={() => setSelectedType('resource_node_iron')}
-              style={{ 
-                padding: '10px', 
+              style={{
+                padding: '10px',
                 background: selectedType === 'resource_node_iron' ? '#444' : '#333',
                 color: 'white',
                 border: '1px solid #666',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               Iron Ore Node
@@ -97,9 +101,7 @@ function App() {
           {status.building ? (
             <div>
               <p>Selected: {status.building}</p>
-              <pre style={{ fontSize: '0.8rem' }}>
-                {JSON.stringify(status.inventory, null, 2)}
-              </pre>
+              <pre style={{ fontSize: '0.8rem' }}>{JSON.stringify(status.inventory, null, 2)}</pre>
             </div>
           ) : (
             <p>Select a building</p>

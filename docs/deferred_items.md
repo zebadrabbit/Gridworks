@@ -1,6 +1,8 @@
 # Deferred Items & Buildings
 
-This document tracks items and buildings that are planned for future implementation but are not required for the core "Starter" production loop.
+This document tracks items, buildings, mechanics, and UI/UX work that are
+planned but not required for the core "Starter" production loop.
+(Merged from the former root-level `DEFERRED.md`.)
 
 ## Buildings
 - [ ] **Advanced Smelter** (High-tier smelting)
@@ -24,6 +26,28 @@ This document tracks items and buildings that are planned for future implementat
 - [ ] **Fuel Sources** (Fuel Rods, Coal, Oil)
 - [ ] **Advanced Components** (High-tier mechanical parts)
 - [ ] **Tools & Equipment** (Pickaxes, Hammers)
+
+## Mechanics
+- [ ] Complex recipes (multi-stage production).
+- [ ] Power grid logic (voltage drop, wire capacity).
+- [ ] Item "stacking" logic (handling 1000s of items on one belt).
+- [ ] Advanced Sorter logic (filtering by item type).
+- [ ] Multi-input machine logic (e.g., Assembler requiring 3 different inputs).
+- [ ] Dynamic building destruction/repair.
+- [ ] Save/Load system (JSON serialization of world state).
+- [ ] Multiplayer/Co-op synchronization.
+
+## Visuals & Assets
+- [ ] High-resolution sprite sheets for all 50+ machines.
+- [ ] Animated conveyor belt textures (moving textures).
+- [ ] Particle effects for production (smoke, sparks).
+- [ ] Dynamic lighting for "Upload Labs" neon glow.
+
+## UI/UX
+- [ ] Full inventory management screen.
+- [ ] Blueprint system (copy/paste building layouts).
+- [ ] Achievement system.
+- [ ] Tutorial system.
 
 ## Notes
 - *Priority 1:* Complete the "Iron to Advanced Component" loop.
