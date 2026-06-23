@@ -9,6 +9,7 @@ Findings from reviewing the offline-generated prototype, in the order they were 
 - [x] `frontend/src/game/UI.js` didn't import PIXI and didn't `export` `BuildMenu` — `Engine.js`'s `import { BuildMenu } from './UI.js'` would throw at runtime. Fixed.
 - [x] `BuildMenu` set `this.selectedType` on click but `GameEngine` read `this.selectedType_global` — build menu clicks never actually selected a building to place. Wired it through.
 - [x] `Conveyor.update()` referenced `this.gridSize`, which `Conveyor` never sets (only the engine has it) — the belt-texture scroll offset was `NaN`. Now reads `this.engine.gridSize`.
+- [x] `Engine.js` treated the `/api/buildings`, `/api/recipes`, `/api/items` responses as bare arrays/maps, but the backend wraps each in an envelope key (`{"buildings": {...}}`, `{"recipes": [...]}`, `{"items": {...}}`). `buildingsData[type]` was `undefined` for every building, and the recipe loop wasn't even iterable. Fixed by unwrapping on fetch.
 
 ### Tooling
 - [x] Added `backend/requirements.txt` (Flask, flask-cors) — nothing pinned its deps before.

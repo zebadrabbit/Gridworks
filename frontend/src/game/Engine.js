@@ -262,14 +262,14 @@ export class GameEngine {
       fetch('http://localhost:5000/api/items'),
     ]);
 
-    this.buildingsData = await bRes.json();
+    this.buildingsData = (await bRes.json()).buildings;
     const recipesRaw = await rRes.json();
     const itemsRaw = await iRes.json();
 
-    for (const r of recipesRaw) {
+    for (const r of recipesRaw.recipes) {
       this.recipes[r.machine_id] = r;
     }
-    this.itemsData = itemsRaw;
+    this.itemsData = itemsRaw.items;
 
     this.renderGrid();
     this.setupInteractions();
