@@ -1,0 +1,234 @@
+{
+  "buildings": {
+    "resource_node_iron": {
+      "name": "Iron Ore Node",
+      "dimensions": {"width": 28, "length": 28, "height": 28},
+      "area": 784,
+      "ports": {
+        "output": [
+          {"x": 14, "y": 14, "type": "raw_material"}
+        ]
+      },
+      "tier": 0,
+      "image": "https://satisfactory.wiki.gg/images/buildings/iron_ore_node.png"
+    },
+    "resource_node_copper": {
+      "name": "Copper Ore Node",
+      "dimensions": {"width": 28, "length": 28, "height": 28},
+      "area": 784,
+      "ports": {
+        "output": [
+          {"x": 14, "y": 14, "type": "raw_material"}
+        ]
+      },
+      "tier": 0,
+      "image": "https://satisfactory.wiki.gg/images/buildings/copper_ore_node.png"
+    },
+    "resource_node_coal": {
+      "name": "Coal Node",
+      "dimensions": {"width": 28, "length": 28, "height": 28},
+      "area": 784,
+      "ports": {
+        "output": [
+          {"x": 14, "y": 14, "type": "raw_material"}
+        ]
+      },
+      "tier": 0,
+      "image": "https://satisfactory.wiki.gg/images/buildings/coal_node.png"
+    },
+    "gatherer_basic": {
+      "name": "Basic Gatherer",
+      "dimensions": {"width": 4, "length": 4, "height": 4},
+      "area": 16,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "raw_material"}],
+        "output": [{"x": 4, "y": 0, "type": "processed_material"}]
+      },
+      "tier": 0,
+      "image": "https://satisfactory.wiki.gg/images/buildings/gatherer.png"
+    },
+    "smelter_basic": {
+      "name": "Basic Smelter",
+      "dimensions": {"width": 8, "length": 8, "height": 8},
+      "area": 64,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "raw_material"}],
+        "output": [{"x": 8, "y": 0, "type": "processed_material"}]
+      },
+      "tier": 0,
+      "image": "https://satisfactory.wiki.gg/images/buildings/smelter.png"
+    },
+    "storage_basic": {
+      "name": "Basic Storage",
+      "dimensions": {"width": 8, "length": 8, "height": 8},
+      "area": 64,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "any"}]
+      },
+      "tier": 0,
+      "image": "https://satisfactory.wiki.gg/images/buildings/storage_bin.png"
+    },
+    "conveyor_mk1": {
+      "name": "Conveyor Mk1",
+      "dimensions": {"width": 1, "length": 1, "height": 1},
+      "area": 1,
+      "speed": 10,
+      "capacity": 100,
+      "tier": 1,
+      "is_conveyor": true,
+      "image": "https://satisfactory.wiki.gg/images/buildings/conveyor_mk1.png"
+    },
+    "conveyor_mk2": {
+      "name": "Conveyor Mk2",
+      "dimensions": {"width": 1, "length": 1, "height": 1},
+      "area": 1,
+      "speed": 20,
+      "capacity": 200,
+      "tier": 2,
+      "is_conveyor": true,
+      "image": "https://satisfactory.wiki.gg/images/buildings/conveyor_mk2.png"
+    },
+    "conveyor_mk3": {
+      "name": "Conveyor Mk3",
+      "dimensions": {"width": 1, "length": 1, "height": 1},
+      "area": 1,
+      "speed": 40,
+      "capacity": 400,
+      "tier": 3,
+      "is_conveyor": true,
+      "image": "https://satisfactory.wiki.gg/images/buildings/conveyor_mk3.png"
+    },
+    "splitter": {
+      "name": "Splitter",
+      "dimensions": {"width": 2, "length": 2, "height": 2},
+      "area": 4,
+      "ports": {
+        "input": [{"x": 1, "y": 1, "type": "any"}],
+        "output": [{"x": 0, "y": 1, "type": "any"}, {"x": 2, "y": 1, "type": "any"}]
+      },
+      "tier": 1,
+      "image": "https://satisfactory.wiki.gg/images/buildings/splitter.png"
+    },
+    "merger": {
+      "name": "Merger",
+      "dimensions": {"width": 2, "length": 2, "height": 2},
+      "area": 4,
+      "ports": {
+        "input": [{"x": 0, "y": 1, "type": "any"}, {"x": 2, "y": 1, "type": "any"}],
+        "output": [{"x": 1, "y": 1, "type": "any"}]
+      },
+      "tier": 1,
+      "image": "https://satisfactory.wiki.gg/images/buildings/merger.png"
+    },
+    "sorter": {
+      "name": "Sorter",
+      "dimensions": {"width": 2, "length": 2, "height": 2},
+      "area": 4,
+      "ports": {
+        "input": [{"x": 1, "y": 1, "type": "any"}],
+        "output": [{"x": 0, "y": 1, "type": "any"}, {"x": 2, "y": 1, "type": "any"}]
+      },
+      "tier": 1,
+      "image": "https://satisfactory.wiki.gg/images/buildings/sorter.png"
+    },
+    "power_pole": {
+      "name": "Power Pole",
+      "dimensions": {"width": 1, "length": 1, "height": 1},
+      "area": 1,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "power"}],
+        "output": [{"x": 1, "y": 0, "type": "power"}]
+      },
+      "tier": 0,
+      "image": "https://satisfactory.wiki.gg/images/buildings/power_pole.png"
+    },
+    "battery": {
+      "name": "Battery",
+      "dimensions": {"width": 2, "length": 2, "height": 2},
+      "area": 4,
+      "ports": {
+        "input": [{"x": 1, "y": 1, "type": "power"}],
+        "output": [{"x": 1, "y": 1, "type": "power"}]
+      },
+      "tier": 0,
+      "image": "https://satisfactory.wiki.gg/images/buildings/battery.png"
+    },
+    "refinery": {
+      "name": "Refinery",
+      "dimensions": {"width": 12, "length": 12, "height": 12},
+      "area": 144,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "raw_material"}],
+        "output": [{"x": 12, "y": 0, "type": "processed_material"}]
+      },
+      "tier": 1,
+      "image": "https://satisfactory.wiki.gg/images/buildings/refinery.png"
+    },
+    "fabricator": {
+      "name": "Fabricator",
+      "dimensions": {"width": 12, "length": 12, "height": 12},
+      "area": 144,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "processed_material"}],
+        "output": [{"x": 12, "y": 0, "type": "processed_material"}]
+      },
+      "tier": 1,
+      "image": "https://satisfactory.wiki.gg/images/buildings/fabricator.png"
+    },
+    "assembler": {
+      "name": "Assembler",
+      "dimensions": {"width": 12, "length": 12, "height": 12},
+      "area": 144,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "processed_material"}],
+        "output": [{"x": 12, "y": 0, "type": "processed_material"}]
+      },
+      "tier": 2,
+      "image": "https://satisfactory.wiki.gg/images/buildings/assembler.png"
+    },
+    "manufacturer": {
+      "name": "Manufacturer",
+      "dimensions": {"width": 12, "length": 12, "height": 12},
+      "area": 144,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "processed_material"}],
+        "output": [{"x": 12, "y": 0, "type": "processed_material"}]
+      },
+      "tier": 2,
+      "image": "https://satisfactory.wiki.gg/images/buildings/manufacturer.png"
+    },
+    "constructor": {
+      "name": "Constructor",
+      "dimensions": {"width": 8, "length": 8, "height": 8},
+      "area": 64,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "processed_material"}],
+        "output": [{"x": 8, "y": 0, "type": "processed_material"}]
+      },
+      "tier": 1,
+      "image": "https://satisfactory.wiki.gg/images/buildings/constructor.png"
+    },
+    "furnace": {
+      "name": "Furnace",
+      "dimensions": {"width": 8, "length": 8, "height": 8},
+      "area": 64,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "raw_material"}],
+        "output": [{"x": 8, "y": 0, "type": "processed_material"}]
+      },
+      "tier": 0,
+      "image": "https://satisfactory.wiki.gg/images/buildings/furnace.png"
+    },
+    "power_wire": {
+      "name": "Power Wire",
+      "dimensions": {"width": 1, "length": 1, "height": 1},
+      "area": 1,
+      "ports": {
+        "input": [{"x": 0, "y": 0, "type": "power"}],
+        "output": [{"x": 1, "y": 0, "type": "power"}]
+      },
+      "tier": 0,
+      "image": "https://satisfactory.wiki.gg/images/buildings/power_wire.png"
+    }
+  }
+}

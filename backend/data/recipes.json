@@ -1,0 +1,66 @@
+{
+  "recipes": [
+    {
+      "id": "smelt_iron",
+      "name": "Smelt Iron",
+      "inputs": {
+        "iron_ore": 5
+      },
+      "outputs": {
+        "iron_ingot": 1
+      },
+      "machine_id": "smelter_basic",
+      "time_seconds": 5
+    },
+    {
+      "id": "refine_ore",
+      "name": "Refine Ore",
+      "inputs": {
+        "iron_ore": 10
+      },
+      "outputs": {
+        "iron_plate": 2
+      },
+      "machine_id": "refinery",
+      "time_seconds": 10
+    },
+    {
+      "id": "fabricate_plate",
+      "name": "Fabricate Plate",
+      "inputs": {
+        "iron_plate": 2
+      },
+      "outputs": {
+        "iron_bar": 4
+      },
+      "machine_id": "fabricator",
+      "time_seconds": 8
+    },
+    {
+      "id": "assemble_complex",
+      "name": "Assemble Complex",
+      "inputs": {
+        "iron_bar": 10,
+        "iron_plate": 5
+      },
+      "outputs": {
+        "complex_part": 1
+      },
+      "machine_id": "assembler",
+      "time_seconds": 20
+    },
+    {
+      "id": "manufacture_advanced",
+      "name": "Manufacture Advanced",
+      "inputs": {
+        "complex_part": 5,
+        "iron_bar": 20
+      },
+      "outputs": {
+        "advanced_component": 1
+      },
+      "machine_id": "manufacturer",
+      "time_seconds": 40
+    }
+  ]
+}

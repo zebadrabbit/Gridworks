@@ -1,0 +1,52 @@
+{
+  "items": {
+    "iron_ore": {
+      "name": "Iron Ore",
+      "description": "Raw iron ore extracted from the ground.",
+      "stack_size": 100,
+      "icon": "https://satisfactory.wiki.gg/images/items/iron_ore.png"
+    },
+    "iron_ingot": {
+      "name": "Iron Ingot",
+      "description": "Refined iron ingot.",
+      "stack_size": 100,
+      "icon": "https://satisfactory.wiki.gg/images/items/iron_ingot.png"
+    },
+    "iron_plate": {
+      "name": "Iron Plate",
+      "description": "Flat iron plate.",
+      "stack_size": 100,
+      "icon": "https://satisfactory.wiki.gg/images/items/iron_plate.png"
+    },
+    "iron_bar": {
+      "name": "Iron Bar",
+      "description": "A standard iron bar.",
+      "stack_size": 100,
+      "icon": "https://satisfactory.wiki.gg/images/items/iron_bar.png"
+    },
+    "complex_part": {
+      "name": "Complex Part",
+      "description": "A complex mechanical component.",
+      "stack_size": 50,
+      "icon": "https://satisfactory.wiki.gg/images/items/complex_part.png"
+    },
+    "advanced_component": {
+      "name": "Advanced Component",
+      "description": "A high-tier advanced component.",
+      "stack_size": 20,
+      "icon": "https://satisfactory.wiki.gg/images/items/advanced_component.png"
+    },
+    "copper_ore": {
+      "name": "Copper Ore",
+      "description": "Raw copper ore.",
+      "stack_size": 100,
+      "icon": "https://satisfactory.wiki.gg/images/items/copper_ore.png"
+    },
+    "coal": {
+      "name": "Coal",
+      "description": "Fuel source.",
+      "stack_size": 200,
+      "icon": "https://satisfactory.wiki.gg/images/items/coal.png"
+    }
+  }
+}
