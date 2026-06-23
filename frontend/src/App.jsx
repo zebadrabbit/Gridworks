@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GameEngine } from './game/Engine';
 
 function App() {
+  const containerRef = useRef(null);
   const [engine, setEngine] = useState(null);
   const [selectedType, setSelectedType] = useState('smelter_basic');
   const [status, setStatus] = useState({ building: null, inventory: {} });
 
   useEffect(() => {
-    const canvas = document.createElement('canvas');
-    const gameEngine = new GameEngine(canvas);
+    const gameEngine = new GameEngine(containerRef.current);
     setEngine(gameEngine);
 
     // Update status every 100ms
@@ -111,7 +111,7 @@ function App() {
 
       {/* Game Canvas */}
       <div style={{ flex: 1, position: 'relative' }}>
-        {engine && <div style={{ width: '100%', height: '100%' }}>{engine.app.view}</div>}
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       </div>
     </div>
   );
