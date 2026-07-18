@@ -41,3 +41,13 @@ aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
   padding: 1px 0; color: #9fb0c3; }
 .status { font-size: 12px; }
 .status.good { color: #58d68d; } .status.warn { color: #f4d03f; } .status.bad { color: #ff7675; }
+
+.pal-item.locked { opacity: .35; pointer-events: none; }
+
+#milestone { position: fixed; left: 230px; bottom: 10px; width: 220px;
+  background: rgba(10,13,20,.92); border: 1px solid #1d2733; border-radius: 6px;
+  backdrop-filter: blur(4px); padding: 10px; z-index: 10; }
+#milestone h3 { font-size: 12px; letter-spacing: 1px; color: #4dd8ff; margin-bottom: 6px; }
+#milestone .ms-row { font-size: 11px; color: #9fb0c3; margin: 4px 0 2px; display: flex; justify-content: space-between; }
+.ms-bar { background: #152232; height: 6px; border-radius: 3px; margin-bottom: 6px; }
+.ms-bar > i { display: block; height: 6px; border-radius: 3px; background: #4dd8ff; }

@@ -371,9 +371,11 @@ function buildPalette() {
     g.innerHTML = `<h3>${title}</h3>`;
     for (const def of defs) {
       const el = document.createElement('div');
-      el.className = 'pal-item';
+      const locked = !S.isUnlocked(state, def.key);
+      el.className = locked ? 'pal-item locked' : 'pal-item';
       el.dataset.key = def.key;
-      const meta = def.powerOut ? `+${def.powerOut}MW` : def.draw ? `${def.draw}MW` : '';
+      const meta = locked ? (S.MILESTONES.find((m) => m.rewards.buildings?.includes(def.key))?.name ?? '')
+        : def.powerOut ? `+${def.powerOut}MW` : def.draw ? `${def.draw}MW` : '';
       el.innerHTML = `<span>${def.name}</span><small>${meta}</small>`;
       el.onclick = () => setMode(ui.placeKey === def.key ? 'idle' : 'place', ui.placeKey === def.key ? null : def.key);
       g.appendChild(el);
@@ -470,6 +472,20 @@ function updateBuffers() {
   if (shipped) shipped.innerHTML = render(state.shipped);
 }
 
+function updateMilestonePanel() {
+  const box = document.getElementById('milestone');
+  const idx = state.unlocked?.milestone ?? 0;
+  const ms = S.MILESTONES[idx];
+  if (!ms) { box.innerHTML = `<h3>Milestones</h3><div class="dim">All milestones complete</div>`; return; }
+  const rows = Object.entries(ms.cost).map(([res, amt]) => {
+    const have = fmt(state.msProgress[res] ?? 0);
+    const pct = Math.min(100, (Math.min(amt, have) / amt) * 100);
+    return `<div class="ms-row"><span>${ctx.names[res] ?? res}</span><span>${Math.min(amt, have)}/${amt}</span></div>
+      <div class="ms-bar"><i style="width:${pct}%"></i></div>`;
+  }).join('');
+  box.innerHTML = `<h3>${ms.name}</h3>${rows}`;
+}
+
 function updateHud() {
   const p = state.power ?? { supply: 0, demand: 0 };
   document.getElementById('hud-power').textContent = `⚡ ${fmt(p.demand)} / ${fmt(p.supply)} MW`;
@@ -513,12 +529,15 @@ async function main() {
   setInterval(save, 5000);
   addEventListener('beforeunload', save);
   setInterval(updateBuffers, 400);
+  setInterval(updateMilestonePanel, 400);
+  updateMilestonePanel();
 
-  let last = performance.now(), acc = 0;
+  let last = performance.now(), acc = 0, lastMs = -1;
   const STEP = 0.1;
   function frame(now) {
     acc += Math.min(0.5, (now - last) / 1000); last = now;
     while (acc >= STEP) { S.tick(state, STEP, ctx); acc -= STEP; }
+    if ((state.unlocked?.milestone ?? 0) !== lastMs) { lastMs = state.unlocked?.milestone ?? 0; buildPalette(); }
     draw(now);
     updateHud();
     requestAnimationFrame(frame);
