@@ -45,7 +45,7 @@ export const MILESTONES = [
   { name: 'Screws & Wire', cost: { screw: 500, wire: 300, 'copper-ingot': 100 },
     rewards: { buildings: ['miner-mk2'] } },
   { name: 'Coal Power', cost: { 'reinforced-iron-plate': 50, rotor: 25, cable: 100 },
-    rewards: { buildings: ['coal-generator', 'water-extractor', 'fluid-buffer', 'pipe-splitter', 'pipe-merger'] } },
+    rewards: { buildings: ['coal-generator', 'water-extractor', 'fluid-buffer'] } },
   { name: 'Basic Steel', cost: { concrete: 300, 'copper-sheet': 150 },
     rewards: { buildings: ['foundry'], beltMark: 2 } },
   { name: 'Oil Processing', cost: { 'steel-beam': 100, 'steel-pipe': 100 },
@@ -415,7 +415,7 @@ export function tick(state, dt, ctx) {
       const ms = MILESTONES[state.unlocked?.milestone];
       node.status = ms ? `milestone: ${ms.name}` : 'all milestones complete';
       if (ms && Object.entries(ms.cost).every(([res, amt]) => (state.msProgress[res] ?? 0) >= amt)) {
-        for (const b of ms.rewards.buildings ?? []) state.unlocked.buildings.push(b);
+        for (const b of ms.rewards.buildings ?? []) if (!state.unlocked.buildings.includes(b)) state.unlocked.buildings.push(b);
         if (ms.rewards.beltMark != null) state.beltMark = ms.rewards.beltMark;
         if (ms.rewards.pipeMark != null) state.pipeMark = ms.rewards.pipeMark;
         state.msProgress = {};

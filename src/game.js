@@ -394,7 +394,7 @@ function refreshInspector() {
     const w = state.wires.find((q) => q.id === ui.sel.id);
     if (!w) return select(null);
     const marks = w.kind === 'fluid' ? ctx.pipes : (w.kind === 'item' ? ctx.belts : null);
-    const maxMark = w.kind === 'fluid' ? state.pipeMark : state.beltMark;
+    const maxMark = w.kind === 'fluid' ? (state.pipeMark ?? ctx.pipes.length - 1) : (state.beltMark ?? ctx.belts.length - 1);
     const markHtml = marks ? `<section><label class="dim">Tier</label><select id="mark">
       ${Array.from({ length: maxMark + 1 }, (_, i) =>
         `<option value="${i}" ${w.mark === i ? 'selected' : ''}>${marks[i].rate}/min</option>`).join('')}
