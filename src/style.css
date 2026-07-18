@@ -44,7 +44,7 @@ aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
 
 .pal-item.locked { opacity: .35; pointer-events: none; }
 
-#milestone { position: fixed; left: 230px; bottom: 10px; width: 220px;
+#milestone { position: fixed; top: auto; left: 230px; bottom: 10px; width: 220px;
   background: rgba(10,13,20,.92); border: 1px solid #1d2733; border-radius: 6px;
   backdrop-filter: blur(4px); padding: 10px; z-index: 10; }
 #milestone h3 { font-size: 12px; letter-spacing: 1px; color: #4dd8ff; margin-bottom: 6px; }
