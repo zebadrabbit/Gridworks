@@ -20,7 +20,7 @@ const cx = canvas.getContext('2d');
 let ctx, state;
 const cam = { x: 0, y: 0, z: 1 };
 const ui = { mode: 'idle', placeKey: null, wireFrom: null, sel: null, hover: null,
-  mouse: { x: 0, y: 0 }, drag: null, hint: '' };
+  mouse: { x: 0, y: 0 }, drag: null, hint: '', wireStyle: 'noodle' };
 
 // ------------------------------------------------------------------ geometry
 
@@ -353,7 +353,10 @@ addEventListener('mouseup', () => {
     if (over) {
       const from = ui.wireFrom;
       const a = state.nodes.find((q) => q.id === from.node.id);
-      if (a) S.addWire(state, a, from.port.id, over.node, over.port.id, ctx);
+      if (a) {
+        const nw = S.addWire(state, a, from.port.id, over.node, over.port.id, ctx);
+        if (nw) nw.style = ui.wireStyle;
+      }
     }
     setMode('idle');
   }
@@ -407,6 +410,15 @@ addEventListener('keydown', (e) => {
       S.removeWire(state, ui.sel.id);
     }
     select(null);
+  }
+  if (e.key === 's' || e.key === 'S') {
+    if (ui.sel?.type === 'wire') {
+      const w = state.wires.find((q) => q.id === ui.sel.id);
+      if (w) { w.style = w.style === 'straight' ? 'noodle' : 'straight'; select({ type: 'wire', id: w.id }); }
+    } else {
+      ui.wireStyle = ui.wireStyle === 'straight' ? 'noodle' : 'straight';
+      ui.hint = `new wires: ${ui.wireStyle} · S to toggle`;
+    }
   }
 });
 
