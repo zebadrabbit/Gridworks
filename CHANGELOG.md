@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-07-18 — Iteration 2
+
+- **Deposits as wireable nodes**: mineral/oil deposits render as fixed, undeletable
+  nodes with a `resource` out port; water deposits get 2/3/4 out ports by purity.
+  Miners are placed on free tiles and wired to a matching deposit (one deposit port
+  per miner). Mapgen's pre-existing bug where deposits could block the hub's spawn
+  tile is fixed.
+- **Biomass bootstrap replaces free HUB power**: mapgen scatters plant deposits that
+  emit `leaves`/`wood`; a new biomass burner (30 MW, no power draw, wiki fuel-MJ
+  table) burns them to power the early chain. The HUB no longer grants free power —
+  it's purely the milestone sink.
+- **7-milestone HUB ladder**: shipping the active milestone's required items into the
+  HUB unlocks buildings and belt/pipe marks in order, gating the palette (locked
+  entries greyed with the unlocking milestone named) and shown in a milestone HUD
+  panel. Progress and unlocks persist in the save.
+- **Splitters and mergers**: 1-tile logistic nodes (item and fluid/pipe variants) doing
+  per-tick proportional fair-share distribution across connected wires; unlocked from
+  the start.
+- **Belt/pipe marks**: all 6 belts and 2 pipes from the source JSON are selectable per
+  wire via the inspector, defaulting to the highest unlocked mark.
+- Save format bumped to `gridworks-save-v2` (iteration-1 saves are not migrated).
+- `fix:` follow-up — inspector wire-mark dropdown now falls back to the highest
+  catalog mark when a state is missing `beltMark`/`pipeMark`; milestone reward pushes
+  are deduped and 'Coal Power' no longer re-grants pipe-splitter/pipe-merger (already
+  start-unlocked).
+
 ## 2026-07-18 — Project layout + manage.sh
 
 - Moved app code to `src/` (`sim.js`, `game.js`, `style.css`) and the sim test to

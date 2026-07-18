@@ -70,6 +70,16 @@ milestone check in the HUB branch of `tick`, splitter/merger node type, per-wire
 panel, wire-mark inspector row. `test_sim.mjs` extends: deposit→miner wiring rule,
 burner powers a machine, milestone completes and unlocks, splitter splits 60 → 3×20.
 
+## Reality notes (post-implementation)
+
+- **Splitter/merger distribution**: shipped as proportional-per-tick fair share for both
+  items and fluids, not whole-unit round-robin for items as sketched above — simpler to
+  implement and avoids rounding starvation on low-throughput belts.
+- **Pipe splitter/merger unlock**: both are in `START_UNLOCKED` alongside the item
+  splitter/merger (section 5 already said "unlocked from the start" but section 3's
+  milestone table originally also listed them as a 'Coal Power' reward — that duplicate
+  reward was a bug, since fixed; milestone 3 no longer grants them).
+
 ## Deferred
 
 Vehicles/trains/drones, space elevator (candidate end-goal), enemies → alien-protein

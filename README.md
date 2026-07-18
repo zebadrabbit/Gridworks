@@ -1,8 +1,11 @@
 # Gridworks
 
-A Satisfactory-themed grid idler in the visual style of Upload Labs: place miners on
-randomly scattered deposits, wire up machines, containers, and power on a neon grid,
-and watch resources flow.
+A Satisfactory-themed grid idler in the visual style of Upload Labs: deposits are fixed
+nodes you wire to miners, machines, containers, and power on a neon grid, and watch
+resources flow. Bootstrap power comes from plant deposits feeding a biomass burner (the
+HUB itself has no free power); ship items into the HUB to climb a 7-milestone ladder
+that unlocks buildings and higher belt/pipe marks; splitters and mergers fan wires out
+and back in with per-tick fair-share distribution.
 
 `data/source/satisfactory_data.json` is the immutable source of truth for all items,
 buildings, recipes, and resource weights (see `docs/SOURCE_OF_TRUTH.md`).
@@ -42,6 +45,7 @@ autosaves to localStorage; "New Map" regenerates the world.
 
 ## Docs
 
-- `docs/superpowers/specs/2026-07-18-iteration-2-design.md` — next iteration design
+- `docs/superpowers/specs/2026-07-18-iteration-2-design.md` — current design (deposit
+  nodes, biomass bootstrap, milestones, belt/pipe marks, splitters/mergers)
 - `docs/superpowers/specs/2026-07-15-grid-idler-rebuild.md` — current build design + deferred work
 - `docs/DATA_PIPELINE.md`, `data/ENTITIES_CONTRACT.md` — data policies (predate the rebuild)
