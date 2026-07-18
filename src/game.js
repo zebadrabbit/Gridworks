@@ -2,11 +2,11 @@
 import * as S from './sim.js';
 
 const T = S.TILE;
-const SAVE_KEY = 'gridworks-save-v1';
-const KIND_COLOR = { item: '#58d68d', fluid: '#5dade2', power: '#f4d03f' };
+const SAVE_KEY = 'gridworks-save-v2';
+const KIND_COLOR = { item: '#58d68d', fluid: '#5dade2', power: '#f4d03f', resource: '#e17055' };
 const TYPE_COLOR = {
   miner: '#f5a623', machine: '#4dd8ff', store: '#a29bfe',
-  generator: '#f4d03f', hub: '#ff6b81',
+  generator: '#f4d03f', hub: '#ff6b81', deposit: '#8d6e63',
 };
 const DEP_STYLE = {
   mineral: { fill: '#241c14', edge: '#8d6e63' },
@@ -55,10 +55,6 @@ function nodeAt(wx, wy) {
   }
   return null;
 }
-function depositAtPx(wx, wy) {
-  return state.deposits.find((d) =>
-    wx >= d.x * T && wx <= (d.x + d.size) * T && wy >= d.y * T && wy <= (d.y + d.size) * T);
-}
 function wireEnds(w) {
   const a = state.nodes.find((n) => n.id === w.a.n);
   const b = state.nodes.find((n) => n.id === w.b.n);
@@ -100,7 +96,6 @@ function draw(now) {
   cx.scale(cam.z, cam.z);
 
   drawGrid();
-  for (const d of state.deposits) drawDeposit(d);
   for (const w of state.wires) drawWire(w, now);
   if (ui.mode === 'wire' && ui.wireFrom) drawWirePreview();
   for (const n of state.nodes) drawNode(n);
@@ -137,23 +132,33 @@ function panel(x, y, w, h, edge, glow) {
   cx.shadowBlur = 0;
 }
 
-function drawDeposit(d) {
-  const st = DEP_STYLE[d.cat];
-  const x = d.x * T, y = d.y * T, s = d.size * T;
-  cx.beginPath(); cx.roundRect(x + 2, y + 2, s - 4, s - 4, 8);
-  cx.fillStyle = st.fill; cx.fill();
-  cx.strokeStyle = st.edge; cx.lineWidth = 1.2; cx.setLineDash([4, 3]);
-  cx.stroke(); cx.setLineDash([]);
-  cx.fillStyle = st.edge; cx.font = '9px monospace'; cx.textAlign = 'center';
-  cx.fillText(ctx.names[d.res] ?? d.res, x + s / 2, y + s / 2 - 2);
-  cx.fillText(d.purity, x + s / 2, y + s / 2 + 9);
-  if (ui.sel?.type === 'deposit' && ui.sel.id === d.id) selOutline(x, y, s, s);
-}
-
 function drawNode(n) {
   const def = ctx.catalog[n.key];
   const r = nodePx(n);
   const color = TYPE_COLOR[def.type] ?? '#4dd8ff';
+
+  if (def.type === 'deposit') {
+    const st = DEP_STYLE[n.cat];
+    cx.beginPath(); cx.roundRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, 8);
+    cx.fillStyle = st.fill; cx.fill();
+    cx.strokeStyle = st.edge; cx.lineWidth = 1.2; cx.setLineDash([4, 3]);
+    cx.stroke(); cx.setLineDash([]);
+    cx.fillStyle = st.edge; cx.font = '9px monospace'; cx.textAlign = 'center';
+    cx.fillText(ctx.names[n.res] ?? n.res, r.x + r.w / 2, r.y + r.h / 2 - 2);
+    cx.fillText(n.purity, r.x + r.w / 2, r.y + r.h / 2 + 9);
+    for (const port of S.portsOf(n, ctx)) {
+      const p = portPos(n, port);
+      cx.beginPath(); cx.arc(p.x, p.y, 5, 0, 7);
+      cx.fillStyle = '#0a0c12'; cx.fill();
+      cx.lineWidth = 2; cx.strokeStyle = KIND_COLOR[port.kind];
+      cx.shadowColor = KIND_COLOR[port.kind]; cx.shadowBlur = 6;
+      cx.stroke(); cx.shadowBlur = 0;
+      if (port.dir === 'in') { cx.beginPath(); cx.arc(p.x, p.y, 2, 0, 7); cx.fillStyle = KIND_COLOR[port.kind]; cx.fill(); }
+    }
+    if (ui.sel?.type === 'node' && ui.sel.id === n.id) selOutline(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
+    return;
+  }
+
   panel(r.x + 1, r.y + 1, r.w - 2, r.h - 2, color, 10);
 
   cx.fillStyle = '#e8f6ff'; cx.font = 'bold 10px monospace'; cx.textAlign = 'center';
@@ -271,13 +276,11 @@ canvas.addEventListener('mousedown', (e) => {
   const node = nodeAt(w.x, w.y);
   if (node) {
     select({ type: 'node', id: node.id });
-    ui.drag = { node, ox: w.x / T - node.x, oy: w.y / T - node.y, fx: node.x, fy: node.y };
+    if (!node.fixed) ui.drag = { node, ox: w.x / T - node.x, oy: w.y / T - node.y, fx: node.x, fy: node.y };
     return;
   }
   const wire = wireAt(w.x, w.y);
   if (wire) { select({ type: 'wire', id: wire.id }); return; }
-  const dep = depositAtPx(w.x, w.y);
-  if (dep) { select({ type: 'deposit', id: dep.id }); return; }
   select(null);
   ui.drag = { pan: true, sx: e.clientX, sy: e.clientY };
 });
@@ -300,12 +303,8 @@ addEventListener('mouseup', () => {
     // validate the move: pull the node out, re-check placement
     state.nodes = state.nodes.filter((q) => q.id !== n.id);
     const chk = S.canPlace(state, n.key, nx, ny, ctx);
-    const movedToNewDeposit = chk.ok && chk.deposit && chk.deposit.id !== n.depositId;
     if (chk.ok && (nx !== ui.drag.fx || ny !== ui.drag.fy)) {
       n.x = chk.snap.x; n.y = chk.snap.y;
-      if (movedToNewDeposit) {
-        n.depositId = chk.deposit.id; n.depositRes = chk.deposit.res; n.depositMult = chk.deposit.mult;
-      }
     } else { n.x = ui.drag.fx; n.y = ui.drag.fy; }
     state.nodes.push(n);
   }
@@ -342,7 +341,7 @@ addEventListener('keydown', (e) => {
       if (n?.key === 'the-hub') return; // keep the HUB
       S.removeNode(state, ui.sel.id);
     }
-    if (ui.sel.type === 'wire') state.wires = state.wires.filter((w) => w.id !== ui.sel.id);
+    if (ui.sel.type === 'wire') S.removeWire(state, ui.sel.id);
     select(null);
   }
 });
@@ -388,31 +387,34 @@ function refreshInspector() {
   const box = document.getElementById('inspector');
   if (!ui.sel) { box.innerHTML = '<div class="dim">Nothing selected</div>'; return; }
 
-  if (ui.sel.type === 'deposit') {
-    const d = state.deposits.find((q) => q.id === ui.sel.id);
-    if (!d) return select(null);
-    box.innerHTML = `<h2>${ctx.names[d.res] ?? d.res}</h2>
-      <div class="dim">${d.cat} deposit · ${d.purity} (x${d.mult})</div>
-      <section class="dim">Place a ${d.cat === 'mineral' ? 'miner' : d.cat === 'oil' ? 'Oil Extractor' : 'Water Extractor'} on it.</section>`;
-    return;
-  }
   if (ui.sel.type === 'wire') {
     const w = state.wires.find((q) => q.id === ui.sel.id);
     if (!w) return select(null);
     box.innerHTML = `<h2>${w.kind} wire</h2>
       <div class="dim">flow: ${fmt(w.flow * 60)}/min</div>
       <section><button class="danger" id="del">Delete (Del)</button></section>`;
-    box.querySelector('#del').onclick = () => { state.wires = state.wires.filter((q) => q.id !== w.id); select(null); };
+    box.querySelector('#del').onclick = () => { S.removeWire(state, w.id); select(null); };
     return;
   }
 
   const n = state.nodes.find((q) => q.id === ui.sel.id);
   if (!n) return select(null);
   const def = ctx.catalog[n.key];
+
+  if (def.type === 'deposit') {
+    const used = state.wires.filter((w) => w.a.n === n.id || w.b.n === n.id).length;
+    const total = S.portsOf(n, ctx).length;
+    box.innerHTML = `<h2>${ctx.names[n.res] ?? n.res}</h2>
+      <div class="dim">${n.cat} deposit · ${n.purity} (x${n.mult})</div>
+      <section class="dim">${used}/${total} ports wired</section>`;
+    return;
+  }
+
   const statusCls = ['no power', 'no fuel', 'no recipe'].includes(n.status) ? 'bad'
     : ['waiting for input', 'output full', 'full', 'idle'].includes(n.status) ? 'warn' : 'good';
   let html = `<h2>${def.name}</h2><div class="status ${statusCls}">${n.status}</div>`;
   if (n.depositRes) html += `<div class="dim">on ${ctx.names[n.depositRes]} (x${n.depositMult})</div>`;
+  else if (def.type === 'miner') html += `<div class="dim">wire a deposit to res port</div>`;
   if (def.draw) html += `<div class="dim">draws ${def.draw} MW</div>`;
   if (def.powerOut) html += `<div class="dim">supplies ${def.powerOut} MW</div>`;
 
