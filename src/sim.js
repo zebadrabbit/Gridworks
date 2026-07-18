@@ -35,6 +35,38 @@ const EXTRA_DEFS = {
 // Buildings whose data lists power:0 but which do draw variable power in-game.
 const DRAW_OVERRIDE = { accelerator: 500, converter: 250, 'quantum-encoder': 1000 };
 
+// ponytail: hand-rolled milestone ladder shaped after the wiki's early tiers; costs are
+// idle-scaled guesses, tune freely. Item keys are validated against the JSON at load.
+export const START_UNLOCKED = ['miner-mk1', 'smelter', 'constructor', 'biomass-burner',
+  'storage-container', 'splitter', 'merger', 'pipe-splitter', 'pipe-merger', 'the-hub'];
+export const MILESTONES = [
+  { name: 'Part Assembly', cost: { 'iron-plate': 100, 'iron-rod': 100 },
+    rewards: { buildings: ['assembler'], beltMark: 1 } },
+  { name: 'Screws & Wire', cost: { screw: 500, wire: 300, 'copper-ingot': 100 },
+    rewards: { buildings: ['miner-mk2'] } },
+  { name: 'Coal Power', cost: { 'reinforced-iron-plate': 50, rotor: 25, cable: 100 },
+    rewards: { buildings: ['coal-generator', 'water-extractor', 'fluid-buffer', 'pipe-splitter', 'pipe-merger'] } },
+  { name: 'Basic Steel', cost: { concrete: 300, 'copper-sheet': 150 },
+    rewards: { buildings: ['foundry'], beltMark: 2 } },
+  { name: 'Oil Processing', cost: { 'steel-beam': 100, 'steel-pipe': 100 },
+    rewards: { buildings: ['oil-pump', 'oil-refinery', 'fuel-generator', 'packager'], beltMark: 3, pipeMark: 1 } },
+  { name: 'Advanced Manufacturing', cost: { plastic: 200, rubber: 200, 'modular-frame': 25 },
+    rewards: { buildings: ['manufacturer', 'miner-mk3'], beltMark: 4 } },
+  { name: 'High Tech', cost: { computer: 50, 'smart-plating': 20 },
+    rewards: { buildings: ['blender', 'nuclear-power-plant', 'accelerator', 'converter', 'quantum-encoder'], beltMark: 5 } },
+];
+
+export function validateMilestones(ctx) {
+  for (const m of MILESTONES) {
+    for (const res of Object.keys(m.cost)) if (!ctx.names[res]) throw new Error(`milestone ${m.name}: unknown item ${res}`);
+    for (const b of m.rewards.buildings ?? []) if (!ctx.catalog[b]) throw new Error(`milestone ${m.name}: unknown building ${b}`);
+  }
+}
+
+export function isUnlocked(state, key) {
+  return !state.unlocked || state.unlocked.buildings.includes(key);
+}
+
 export function buildCtx(data) {
   const catalog = {};
   for (const m of data.miners) {
@@ -61,13 +93,15 @@ export function buildCtx(data) {
   const names = {};
   for (const it of [...data.items, ...data.fluids]) names[it.key_name] = it.name;
 
-  return {
+  const built = {
     catalog, recipesByCat, recipeByKey, names,
     fluids: new Set(data.fluids.map((f) => f.key_name)),
     resources: data.resources,
     belts: data.belts,
     pipes: data.pipes,
   };
+  validateMilestones(built);
+  return built;
 }
 
 export function kindOf(res, ctx) { return ctx.fluids.has(res) ? 'fluid' : 'item'; }
@@ -75,6 +109,9 @@ export function kindOf(res, ctx) { return ctx.fluids.has(res) ? 'fluid' : 'item'
 // ---------------------------------------------------------------- map / state
 
 const PURITIES = [[0.5, 'impure'], [1, 'normal'], [2, 'pure']];
+// hub always spawns at the map center; keep deposits from scattering onto its footprint
+export const HUB_X = Math.floor(WORLD_W / 2) - 2;
+export const HUB_Y = Math.floor(WORLD_H / 2) - 2;
 
 export function genMap(seed, ctx) {
   const rng = mulberry32(seed);
@@ -90,7 +127,8 @@ export function genMap(seed, ctx) {
     }
     return 'iron-ore';
   };
-  const free = (x, y) => deposits.every((d) => Math.abs(d.x - x) > 5 || Math.abs(d.y - y) > 5);
+  const free = (x, y) => (Math.abs(HUB_X - x) > 5 || Math.abs(HUB_Y - y) > 5) &&
+    deposits.every((d) => Math.abs(d.x - x) > 5 || Math.abs(d.y - y) > 5);
   const scatter = (count, resFn, cat) => {
     for (let i = 0; i < count; i++) {
       for (let tries = 0; tries < 60; tries++) {
@@ -120,9 +158,10 @@ export function addDeposit(state, res, cat, purity, mult, x, y) {
 
 export function newGame(seed, ctx) {
   const state = { seed, time: 0, nextId: 1, nodes: [], wires: [], shipped: {},
-    beltMark: ctx.belts.length - 1, pipeMark: ctx.pipes.length - 1 };
+    beltMark: 0, pipeMark: 0, msProgress: {},
+    unlocked: { milestone: 0, buildings: [...START_UNLOCKED] } };
   for (const d of genMap(seed, ctx)) addDeposit(state, d.res, d.cat, d.purity, d.mult, d.x, d.y);
-  addNode(state, 'the-hub', Math.floor(WORLD_W / 2) - 2, Math.floor(WORLD_H / 2) - 2, ctx);
+  addNode(state, 'the-hub', HUB_X, HUB_Y, ctx);
   return state;
 }
 
@@ -234,6 +273,7 @@ const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h
 
 // Returns {ok, snap?, reason?}
 export function canPlace(state, key, x, y, ctx) {
+  if (!isUnlocked(state, key)) return { ok: false, reason: 'locked — complete milestones' };
   const def = ctx.catalog[key];
   if (x < 0 || y < 0 || x + def.size > WORLD_W || y + def.size > WORLD_H) return { ok: false, reason: 'out of bounds' };
   const rect = { x, y, w: def.size, h: def.size };
@@ -372,7 +412,15 @@ export function tick(state, dt, ctx) {
     } else if (def.type === 'store') {
       node.status = bufTotal(node.buf) >= def.cap ? 'full' : 'storing';
     } else if (def.type === 'hub') {
-      node.status = 'online';
+      const ms = MILESTONES[state.unlocked?.milestone];
+      node.status = ms ? `milestone: ${ms.name}` : 'all milestones complete';
+      if (ms && Object.entries(ms.cost).every(([res, amt]) => (state.msProgress[res] ?? 0) >= amt)) {
+        for (const b of ms.rewards.buildings ?? []) state.unlocked.buildings.push(b);
+        if (ms.rewards.beltMark != null) state.beltMark = ms.rewards.beltMark;
+        if (ms.rewards.pipeMark != null) state.pipeMark = ms.rewards.pipeMark;
+        state.msProgress = {};
+        state.unlocked.milestone++;
+      }
     } else if (def.type === 'deposit') {
       if (node.cat === 'plant') {
         node.buf.leaves = Math.min(50, (node.buf.leaves ?? 0) + (20 * node.mult / 60) * dt);
@@ -415,8 +463,10 @@ export function tick(state, dt, ctx) {
     const amt = Math.min(rate * dt, share, Math.max(0, space));
     if (amt <= 1e-9) continue;
     src.buf[res] -= amt;
-    if (dstDef.type === 'hub') state.shipped[res] = (state.shipped[res] ?? 0) + amt;
-    else dst.buf[res] = (dst.buf[res] ?? 0) + amt;
+    if (dstDef.type === 'hub') {
+      state.shipped[res] = (state.shipped[res] ?? 0) + amt;
+      state.msProgress[res] = (state.msProgress[res] ?? 0) + amt;
+    } else dst.buf[res] = (dst.buf[res] ?? 0) + amt;
     wire.flow = amt / dt;
   }
   state.time += dt;

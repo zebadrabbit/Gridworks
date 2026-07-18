@@ -1,12 +1,13 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
 
 const state = newGame(42, ctx);
+state.unlocked.buildings = Object.keys(ctx.catalog); state.beltMark = ctx.belts.length - 1; state.pipeMark = ctx.pipes.length - 1;
 const hub = state.nodes.find((n) => n.key === 'the-hub');
 assert.equal(hub.key, 'the-hub');
 assert.ok(state.nodes.filter((n) => n.key === 'deposit').length >= 30, 'map has deposit nodes');
@@ -81,6 +82,7 @@ assert.equal(miner.depositRes, null);
 // splitter: 60/min in -> 3 x 20/min out
 {
   const s2 = newGame(7, ctx);
+  s2.unlocked.buildings = Object.keys(ctx.catalog); s2.beltMark = ctx.belts.length - 1; s2.pipeMark = ctx.pipes.length - 1;
   s2.nodes = s2.nodes.filter((n) => n.key === 'the-hub'); s2.wires = [];
   const d = addDeposit(s2, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
   const m = addNode(s2, 'miner-mk1', 10, 5, ctx);   // 60/min
@@ -105,7 +107,8 @@ assert.equal(miner.depositRes, null);
 {
   const s3 = newGame(9, ctx);
   s3.nodes = s3.nodes.filter((n) => n.key === 'the-hub'); s3.wires = [];
-  assert.equal(s3.beltMark, ctx.belts.length - 1, 'all marks unlocked pre-milestones');
+  assert.equal(s3.beltMark, 0, 'fresh game starts at belt mk1');
+  s3.unlocked.buildings = Object.keys(ctx.catalog); s3.beltMark = ctx.belts.length - 1; s3.pipeMark = ctx.pipes.length - 1;
   const d = addDeposit(s3, 'iron-ore', 'mineral', 'pure', 2, 5, 5);
   const m = addNode(s3, 'miner-mk2', 10, 5, ctx); // 120/min base * 2 = 240
   const box = addNode(s3, 'storage-container', 16, 5, ctx);
@@ -121,6 +124,25 @@ assert.equal(miner.depositRes, null);
   for (let i = 0; i < 600; i++) tick(s3, 0.1, ctx);
   const got = box.buf['iron-ore'] ?? 0;
   assert.ok(got > 100 && got < 130, `mk2 belt caps at ~120/min, got ${got}`);
+}
+
+// milestones: fresh game locks most buildings, shipping completes the active milestone
+{
+  const s4 = newGame(11, ctx);
+  assert.equal(s4.beltMark, 0, 'fresh game starts at belt mk1');
+  assert.ok(isUnlocked(s4, 'smelter'));
+  assert.ok(!isUnlocked(s4, 'assembler'));
+  assert.equal(addNode(s4, 'assembler', 2, 2, ctx), null, 'locked building rejected');
+  const hub4 = s4.nodes.find((n) => n.key === 'the-hub');
+  // ship milestone 1's cost straight into the hub via a stocked container
+  const box = addNode(s4, 'storage-container', 2, 10, ctx);
+  const need = MILESTONES[0].cost;
+  for (const [res, amt] of Object.entries(need)) box.buf[res] = amt + 10;
+  addWire(s4, box, 'out0', hub4, 'in0', ctx);
+  for (let i = 0; i < 6000 && s4.unlocked.milestone === 0; i++) tick(s4, 0.1, ctx);
+  assert.equal(s4.unlocked.milestone, 1, 'milestone 1 complete');
+  for (const b of MILESTONES[0].rewards.buildings ?? []) assert.ok(isUnlocked(s4, b), b + ' unlocked');
+  if (MILESTONES[0].rewards.beltMark != null) assert.equal(s4.beltMark, MILESTONES[0].rewards.beltMark);
 }
 
 // save/load roundtrip
