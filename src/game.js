@@ -73,6 +73,16 @@ function wireAt(wx, wy) {
   return null;
 }
 
+function handleAt(wx, wy) {
+  if (ui.sel?.type !== 'wire') return null;
+  const w = state.wires.find((q) => q.id === ui.sel.id);
+  if (!w || w.style !== 'straight') return null;
+  for (let i = 0; i < w.pts.length; i++) {
+    if (Math.hypot(w.pts[i].x - wx, w.pts[i].y - wy) < 8 / cam.z + 3) return { w, i };
+  }
+  return null;
+}
+
 function wirePath(p1, p2, w) {
   if (w?.style === 'straight') return [p1, ...w.pts, p2];
   // noodle: sample the cubic bezier
@@ -294,6 +304,9 @@ canvas.addEventListener('mousedown', (e) => {
     return;
   }
 
+  const h = handleAt(w.x, w.y);
+  if (h) { ui.sel = { type: 'wire', id: h.w.id, wp: h.i }; ui.drag = { wp: h }; return; }
+
   const port = portAt(w.x, w.y);
   if (port) { ui.mode = 'wire'; ui.wireFrom = port; return; }
 
@@ -317,6 +330,9 @@ canvas.addEventListener('mousemove', (e) => {
   } else if (ui.drag?.node) {
     ui.drag.node.x = Math.round(ui.mouse.x / T - ui.drag.ox);
     ui.drag.node.y = Math.round(ui.mouse.y / T - ui.drag.oy);
+  } else if (ui.drag?.wp) {
+    const { w, i } = ui.drag.wp;
+    w.pts[i] = { x: ui.mouse.x, y: ui.mouse.y };
   }
 });
 
@@ -356,6 +372,22 @@ canvas.addEventListener('wheel', (e) => {
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+canvas.addEventListener('dblclick', (e) => {
+  const p = toWorld(e.offsetX, e.offsetY);
+  const wire = wireAt(p.x, p.y);
+  if (!wire || wire.style !== 'straight') return;
+  const ends = wireEnds(wire);
+  if (!ends) return;
+  const pts = [ends[0], ...wire.pts, ends[1]];
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const d = distToPath([pts[i], pts[i + 1]], p.x, p.y);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  wire.pts.splice(best, 0, { x: p.x, y: p.y });
+  select({ type: 'wire', id: wire.id, wp: best });
+});
+
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
   if (e.key === 'Escape') { setMode('idle'); select(null); }
@@ -365,7 +397,15 @@ addEventListener('keydown', (e) => {
       if (n?.key === 'the-hub') return; // keep the HUB
       S.removeNode(state, ui.sel.id);
     }
-    if (ui.sel.type === 'wire') S.removeWire(state, ui.sel.id);
+    if (ui.sel.type === 'wire') {
+      const w = state.wires.find((q) => q.id === ui.sel.id);
+      if (w && ui.sel.wp != null && w.pts[ui.sel.wp]) {
+        w.pts.splice(ui.sel.wp, 1);
+        select({ type: 'wire', id: w.id });
+        return;
+      }
+      S.removeWire(state, ui.sel.id);
+    }
     select(null);
   }
 });
