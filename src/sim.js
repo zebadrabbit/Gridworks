@@ -22,6 +22,10 @@ const EXTRA_DEFS = {
   'fuel-generator': { name: 'Fuel Generator', type: 'generator', powerOut: 250, burn: { fuel: 20 }, size: 3 },
   'the-hub': { name: 'The HUB', type: 'hub', powerOut: 30, size: 4 },
   'deposit': { name: 'Deposit', type: 'deposit', size: 2 },
+  splitter: { name: 'Splitter', type: 'logistic', lkind: 'item', nIn: 1, nOut: 3, size: 1 },
+  merger: { name: 'Merger', type: 'logistic', lkind: 'item', nIn: 3, nOut: 1, size: 1 },
+  'pipe-splitter': { name: 'Pipe Splitter', type: 'logistic', lkind: 'fluid', nIn: 1, nOut: 3, size: 1 },
+  'pipe-merger': { name: 'Pipe Merger', type: 'logistic', lkind: 'fluid', nIn: 3, nOut: 1, size: 1 },
 };
 // Buildings whose data lists power:0 but which do draw variable power in-game.
 const DRAW_OVERRIDE = { accelerator: 500, converter: 250, 'quantum-encoder': 1000 };
@@ -140,6 +144,9 @@ export function portsOf(node, ctx) {
   } else if (def.type === 'hub') {
     inP('in0', 'item', null, 0);
     inP('in1', 'fluid', null, 1);
+  } else if (def.type === 'logistic') {
+    for (let i = 0; i < def.nIn; i++) inP('in' + i, def.lkind, null, i);
+    for (let i = 0; i < def.nOut; i++) outP('out' + i, def.lkind, null, i);
   }
   if (def.draw > 0) ports.push({ id: 'pin', dir: 'in', kind: 'power', res: null, side: 'N', idx: 0 });
   if (def.powerOut > 0) ports.push({ id: 'pout', dir: 'out', kind: 'power', res: null, side: 'N', idx: 1 });
@@ -342,10 +349,18 @@ export function tick(state, dt, ctx) {
       node.status = 'online';
     } else if (def.type === 'deposit') {
       node.status = '';
+    } else if (def.type === 'logistic') {
+      node.status = 'ok';
     }
   }
 
   const byId = Object.fromEntries(state.nodes.map((n) => [n.id, n]));
+  const outWires = {};
+  for (const w of state.wires) if (w.kind === 'item' || w.kind === 'fluid') (outWires[w.a.n] ??= []).push(w);
+  // snapshot logistic-node buffers so fair-share is computed against the pre-tick total,
+  // not a live buffer that shrinks as earlier sibling wires in this same tick drain it
+  const logisticBuf = {};
+  for (const n of state.nodes) if (ctx.catalog[n.key].type === 'logistic') logisticBuf[n.id] = { ...n.buf };
   for (const wire of state.wires) {
     wire.flow = 0;
     if (wire.kind === 'power') continue;
@@ -362,7 +377,10 @@ export function tick(state, dt, ctx) {
     const space = dstDef.type === 'hub' ? Infinity
       : dstDef.type === 'store' ? dstDef.cap - bufTotal(dst.buf)
       : BUF_CAP - (dst.buf[res] ?? 0);
-    const amt = Math.min(rate * dt, src.buf[res] ?? 0, Math.max(0, space));
+    // ponytail: proportional split each tick, not whole-unit round-robin — same steady-state rates
+    const share = ctx.catalog[src.key].type === 'logistic'
+      ? (logisticBuf[src.id]?.[res] ?? 0) / (outWires[src.id]?.length ?? 1) : (src.buf[res] ?? 0);
+    const amt = Math.min(rate * dt, share, Math.max(0, space));
     if (amt <= 1e-9) continue;
     src.buf[res] -= amt;
     if (dstDef.type === 'hub') state.shipped[res] = (state.shipped[res] ?? 0) + amt;

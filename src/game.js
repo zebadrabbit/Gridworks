@@ -6,7 +6,7 @@ const SAVE_KEY = 'gridworks-save-v2';
 const KIND_COLOR = { item: '#58d68d', fluid: '#5dade2', power: '#f4d03f', resource: '#e17055' };
 const TYPE_COLOR = {
   miner: '#f5a623', machine: '#4dd8ff', store: '#a29bfe',
-  generator: '#f4d03f', hub: '#ff6b81', deposit: '#8d6e63',
+  generator: '#f4d03f', hub: '#ff6b81', deposit: '#8d6e63', logistic: '#58d68d',
 };
 const DEP_STYLE = {
   mineral: { fill: '#241c14', edge: '#8d6e63' },
@@ -360,7 +360,7 @@ function buildPalette() {
     ['Miners', Object.values(ctx.catalog).filter((d) => d.type === 'miner')],
     ['Production', Object.values(ctx.catalog).filter((d) => d.type === 'machine')],
     ['Power', Object.values(ctx.catalog).filter((d) => d.type === 'generator')],
-    ['Logistics', Object.values(ctx.catalog).filter((d) => d.type === 'store')],
+    ['Logistics', Object.values(ctx.catalog).filter((d) => d.type === 'store' || d.type === 'logistic')],
   ];
   const pal = document.getElementById('palette');
   pal.innerHTML = '';

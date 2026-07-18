@@ -67,6 +67,26 @@ const rw = state.wires.find((w) => w.kind === 'resource' && w.b.n === miner.id);
 removeWire(state, rw.id);
 assert.equal(miner.depositRes, null);
 
+// splitter: 60/min in -> 3 x 20/min out
+{
+  const s2 = newGame(7, ctx);
+  s2.nodes = s2.nodes.filter((n) => n.key === 'the-hub'); s2.wires = [];
+  const hub2 = s2.nodes[0];
+  const d = addDeposit(s2, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const m = addNode(s2, 'miner-mk1', 10, 5, ctx);   // 60/min
+  const sp = addNode(s2, 'splitter', 16, 5, ctx);
+  const boxes = [0, 1, 2].map((i) => addNode(s2, 'storage-container', 20, 3 + i * 3, ctx));
+  addWire(s2, d, 'out0', m, 'res0', ctx);
+  addWire(s2, hub2, 'pout', m, 'pin', ctx);
+  addWire(s2, m, 'out0', sp, 'in0', ctx);
+  boxes.forEach((b, i) => assert.ok(addWire(s2, sp, 'out' + i, b, 'in0', ctx)));
+  for (let i = 0; i < 1200; i++) tick(s2, 0.1, ctx); // 120s
+  const got = boxes.map((b) => b.buf['iron-ore'] ?? 0);
+  const total = got.reduce((a, v) => a + v, 0);
+  assert.ok(total > 100, `throughput ${total}`);
+  for (const g of got) assert.ok(Math.abs(g - total / 3) < total * 0.1, `even split ${got}`);
+}
+
 // save/load roundtrip
 const restored = JSON.parse(JSON.stringify(state));
 tick(restored, 0.1, ctx);
