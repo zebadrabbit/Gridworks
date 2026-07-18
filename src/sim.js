@@ -21,6 +21,7 @@ const EXTRA_DEFS = {
   'coal-generator': { name: 'Coal Generator', type: 'generator', powerOut: 75, burn: { coal: 15, water: 45 }, size: 3 },
   'fuel-generator': { name: 'Fuel Generator', type: 'generator', powerOut: 250, burn: { fuel: 20 }, size: 3 },
   'the-hub': { name: 'The HUB', type: 'hub', powerOut: 30, size: 4 },
+  'deposit': { name: 'Deposit', type: 'deposit', size: 2 },
 };
 // Buildings whose data lists power:0 but which do draw variable power in-game.
 const DRAW_OVERRIDE = { accelerator: 500, converter: 250, 'quantum-encoder': 1000 };
@@ -100,12 +101,16 @@ export function genMap(seed, ctx) {
   return deposits;
 }
 
+export function addDeposit(state, res, cat, purity, mult, x, y) {
+  const node = { id: state.nextId++, key: 'deposit', x, y, res, cat, purity, mult,
+    fixed: true, buf: {}, status: '' };
+  state.nodes.push(node);
+  return node;
+}
+
 export function newGame(seed, ctx) {
-  const state = {
-    seed, time: 0, nextId: 1,
-    deposits: genMap(seed, ctx),
-    nodes: [], wires: [], shipped: {},
-  };
+  const state = { seed, time: 0, nextId: 1, nodes: [], wires: [], shipped: {} };
+  for (const d of genMap(seed, ctx)) addDeposit(state, d.res, d.cat, d.purity, d.mult, d.x, d.y);
   addNode(state, 'the-hub', Math.floor(WORLD_W / 2) - 2, Math.floor(WORLD_H / 2) - 2, ctx);
   return state;
 }
@@ -118,7 +123,11 @@ export function portsOf(node, ctx) {
   const inP = (id, kind, res, i) => ports.push({ id, dir: 'in', kind, res, side: 'W', idx: i });
   const outP = (id, kind, res, i) => ports.push({ id, dir: 'out', kind, res, side: 'E', idx: i });
   if (def.type === 'miner') {
+    inP('res0', 'resource', null, 0);
     outP('out0', def.minerCat === 'mineral' ? 'item' : 'fluid', node.depositRes ?? null, 0);
+  } else if (def.type === 'deposit') {
+    const n = node.cat === 'water' ? { 0.5: 2, 1: 3, 2: 4 }[node.mult] : 1;
+    for (let i = 0; i < n; i++) outP('out' + i, 'resource', node.res, i);
   } else if (def.type === 'machine' && node.recipe) {
     const r = ctx.recipeByKey[node.recipe];
     r.ingredients.forEach(([res], i) => inP('in' + i, kindOf(res, ctx), res, i));
@@ -151,6 +160,14 @@ export function canConnect(aNode, aPort, bNode, bPort, state, ctx) {
     const [src, dst] = pa.dir === 'out' ? [pa, pb] : [pb, pa];
     if (src.res && dst.res && src.res !== dst.res) return false;
   }
+  if (pa.kind === 'resource') {
+    const [srcN, srcP, dstN, dstP] = pa.dir === 'out' ? [aNode, aPort, bNode, bPort] : [bNode, bPort, aNode, aPort];
+    const dstDef = ctx.catalog[dstN.key];
+    if (ctx.catalog[srcN.key].type !== 'deposit' || dstDef.type !== 'miner') return false;
+    if (dstDef.minerCat !== srcN.cat) return false;
+    if (state.wires.some((w) => w.kind === 'resource' &&
+        ((w.a.n === srcN.id && w.a.p === srcP) || (w.b.n === dstN.id)))) return false; // port used / miner taken
+  }
   return !state.wires.some((w) =>
     (w.a.n === aNode.id && w.a.p === aPort && w.b.n === bNode.id && w.b.p === bPort) ||
     (w.a.n === bNode.id && w.a.p === bPort && w.b.n === aNode.id && w.b.p === aPort));
@@ -164,7 +181,22 @@ export function addWire(state, aNode, aPort, bNode, bPort, ctx) {
   if (pa.kind !== 'power' && pa.dir === 'in') [a, b] = [b, a];
   const wire = { id: state.nextId++, a, b, kind: pa.kind, flow: 0 };
   state.wires.push(wire);
+  if (wire.kind === 'resource') {
+    const src = state.nodes.find((n) => n.id === wire.a.n);
+    const dst = state.nodes.find((n) => n.id === wire.b.n);
+    dst.depositRes = src.res; dst.depositMult = src.mult;
+  }
   return wire;
+}
+
+export function removeWire(state, id) {
+  const w = state.wires.find((q) => q.id === id);
+  if (!w) return;
+  if (w.kind === 'resource') {
+    const dst = state.nodes.find((n) => n.id === w.b.n);
+    if (dst) { dst.depositRes = null; dst.depositMult = null; }
+  }
+  state.wires = state.wires.filter((q) => q.id !== id);
 }
 
 // ------------------------------------------------------------------ placement
@@ -175,25 +207,10 @@ export function nodeRect(node, ctx) {
 }
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-export function depositAt(state, x, y, size) {
-  const r = { x, y, w: size, h: size };
-  return state.deposits.find((d) => overlaps(r, { x: d.x, y: d.y, w: d.size, h: d.size }));
-}
-
-// Returns {ok, snap?, deposit?, reason?}
+// Returns {ok, snap?, reason?}
 export function canPlace(state, key, x, y, ctx) {
   const def = ctx.catalog[key];
   if (x < 0 || y < 0 || x + def.size > WORLD_W || y + def.size > WORLD_H) return { ok: false, reason: 'out of bounds' };
-  const dep = depositAt(state, x, y, def.size);
-  if (def.type === 'miner') {
-    if (!dep) return { ok: false, reason: 'place on a deposit' };
-    if (dep.cat !== def.minerCat) return { ok: false, reason: `needs a ${def.minerCat} deposit` };
-    if (state.nodes.some((n) => n.depositId === dep.id)) return { ok: false, reason: 'deposit occupied' };
-    const rect = { x: dep.x, y: dep.y, w: def.size, h: def.size };
-    if (state.nodes.some((n) => overlaps(rect, nodeRect(n, ctx)))) return { ok: false, reason: 'blocked' };
-    return { ok: true, snap: { x: dep.x, y: dep.y }, deposit: dep };
-  }
-  if (dep) return { ok: false, reason: 'blocked by deposit' };
   const rect = { x, y, w: def.size, h: def.size };
   if (state.nodes.some((n) => overlaps(rect, nodeRect(n, ctx)))) return { ok: false, reason: 'blocked' };
   return { ok: true, snap: { x, y } };
@@ -206,18 +223,15 @@ export function addNode(state, key, x, y, ctx) {
     id: state.nextId++, key, x: chk.snap.x, y: chk.snap.y,
     buf: {}, recipe: null, progress: 0, status: 'idle',
   };
-  if (chk.deposit) {
-    node.depositId = chk.deposit.id;
-    node.depositRes = chk.deposit.res;
-    node.depositMult = chk.deposit.mult;
-  }
   state.nodes.push(node);
   return node;
 }
 
 export function removeNode(state, id) {
+  if (state.nodes.find((n) => n.id === id)?.fixed) return;
+  const wireIds = state.wires.filter((w) => w.a.n === id || w.b.n === id).map((w) => w.id);
+  for (const wid of wireIds) removeWire(state, wid);
   state.nodes = state.nodes.filter((n) => n.id !== id);
-  state.wires = state.wires.filter((w) => w.a.n !== id && w.b.n !== id);
 }
 
 export function setRecipe(state, node, recipeKey, ctx) {
@@ -290,6 +304,7 @@ export function tick(state, dt, ctx) {
     const def = ctx.catalog[node.key];
     const r = ratioOf(node);
     if (def.type === 'miner') {
+      if (!node.depositRes) { node.status = 'no deposit'; continue; }
       if (r <= 0) { node.status = 'no power'; continue; }
       const res = node.depositRes;
       const have = node.buf[res] ?? 0;
@@ -325,6 +340,8 @@ export function tick(state, dt, ctx) {
       node.status = bufTotal(node.buf) >= def.cap ? 'full' : 'storing';
     } else if (def.type === 'hub') {
       node.status = 'online';
+    } else if (def.type === 'deposit') {
+      node.status = '';
     }
   }
 
