@@ -13,14 +13,19 @@ export function mulberry32(seed) {
   };
 }
 
-// ponytail: coal/fuel generator, container, HUB stats are wiki values not present in the
-// source JSON; HUB free power is the bootstrap workaround for biomass/hand-mining.
+// ponytail: coal/fuel/biomass generator, container, HUB stats are wiki values not present
+// in the source JSON; biomass burner + plant deposits are the power bootstrap.
 const EXTRA_DEFS = {
   'storage-container': { name: 'Storage Container', type: 'store', storeKind: 'item', cap: 2400, size: 2 },
   'fluid-buffer': { name: 'Fluid Buffer', type: 'store', storeKind: 'fluid', cap: 2400, size: 2 },
   'coal-generator': { name: 'Coal Generator', type: 'generator', powerOut: 75, burn: { coal: 15, water: 45 }, size: 3 },
   'fuel-generator': { name: 'Fuel Generator', type: 'generator', powerOut: 250, burn: { fuel: 20 }, size: 3 },
-  'the-hub': { name: 'The HUB', type: 'hub', powerOut: 30, size: 4 },
+  // ponytail: wiki stats (satisfactory.fandom.com) — burner 30 MW; fuel MJ: leaves 15,
+  // wood 100, mycelia 20, biomass 180, solid biofuel 450. Plant emission rates invented
+  // for idle pacing.
+  'biomass-burner': { name: 'Biomass Burner', type: 'generator', powerOut: 30, size: 2,
+    fuels: { leaves: 15, wood: 100, mycelia: 20, biomass: 180, 'solid-biofuel': 450 } },
+  'the-hub': { name: 'The HUB', type: 'hub', powerOut: 0, size: 4 },
   'deposit': { name: 'Deposit', type: 'deposit', size: 2 },
   splitter: { name: 'Splitter', type: 'logistic', lkind: 'item', nIn: 1, nOut: 3, size: 1 },
   merger: { name: 'Merger', type: 'logistic', lkind: 'item', nIn: 3, nOut: 1, size: 1 },
@@ -102,6 +107,7 @@ export function genMap(seed, ctx) {
   scatter(28, pickMineral, 'mineral');
   scatter(5, () => 'crude-oil', 'oil');
   scatter(7, () => 'water', 'water');
+  scatter(8, () => 'leaves', 'plant');
   return deposits;
 }
 
@@ -130,8 +136,11 @@ export function portsOf(node, ctx) {
     inP('res0', 'resource', null, 0);
     outP('out0', def.minerCat === 'mineral' ? 'item' : 'fluid', node.depositRes ?? null, 0);
   } else if (def.type === 'deposit') {
-    const n = node.cat === 'water' ? { 0.5: 2, 1: 3, 2: 4 }[node.mult] : 1;
-    for (let i = 0; i < n; i++) outP('out' + i, 'resource', node.res, i);
+    if (node.cat === 'plant') { outP('out0', 'item', null, 0); }
+    else {
+      const n = node.cat === 'water' ? { 0.5: 2, 1: 3, 2: 4 }[node.mult] : 1;
+      for (let i = 0; i < n; i++) outP('out' + i, 'resource', node.res, i);
+    }
   } else if (def.type === 'machine' && node.recipe) {
     const r = ctx.recipeByKey[node.recipe];
     r.ingredients.forEach(([res], i) => inP('in' + i, kindOf(res, ctx), res, i));
@@ -140,7 +149,9 @@ export function portsOf(node, ctx) {
     inP('in0', def.storeKind, null, 0);
     outP('out0', def.storeKind, null, 0);
   } else if (def.type === 'generator') {
-    Object.keys(def.burn).forEach((res, i) => inP('in' + i, kindOf(res, ctx), res, i));
+    if (def.burn) Object.keys(def.burn).forEach((res, i) => inP('in' + i, kindOf(res, ctx), res, i));
+    else ports.push({ id: 'in0', dir: 'in', kind: 'item', res: null, side: 'W', idx: 0,
+                      accepts: Object.keys(def.fuels) });
   } else if (def.type === 'hub') {
     inP('in0', 'item', null, 0);
     inP('in1', 'fluid', null, 1);
@@ -166,6 +177,10 @@ export function canConnect(aNode, aPort, bNode, bPort, state, ctx) {
     if (pa.dir === pb.dir) return false;
     const [src, dst] = pa.dir === 'out' ? [pa, pb] : [pb, pa];
     if (src.res && dst.res && src.res !== dst.res) return false;
+  }
+  {
+    const [sp, dp] = pa.dir === 'out' ? [pa, pb] : [pb, pa];
+    if (dp.accepts && sp.res && !dp.accepts.includes(sp.res)) return false;
   }
   if (pa.kind === 'resource') {
     const [srcN, srcP, dstN, dstP] = pa.dir === 'out' ? [aNode, aPort, bNode, bPort] : [bNode, bPort, aNode, aPort];
@@ -288,8 +303,11 @@ function powerNetworks(state, ctx) {
   return nets;
 }
 function supplying(node, def) {
-  if (def.type === 'hub') return true;
-  if (def.type === 'generator') return Object.keys(def.burn).every((res) => (node.buf[res] ?? 0) > 0);
+  if (def.type === 'generator') {
+    return def.burn
+      ? Object.keys(def.burn).every((res) => (node.buf[res] ?? 0) > 0)
+      : Object.keys(def.fuels).some((res) => (node.buf[res] ?? 0) > 0);
+  }
   if (def.powerOut > 0) return node.progress > 0; // nuclear plant supplies while reacting
   return false;
 }
@@ -338,8 +356,13 @@ export function tick(state, dt, ctx) {
       }
     } else if (def.type === 'generator') {
       if (supplying(node, def)) {
-        for (const [res, perMin] of Object.entries(def.burn)) {
-          node.buf[res] = Math.max(0, (node.buf[res] ?? 0) - (perMin / 60) * dt);
+        if (def.burn) {
+          for (const [res, perMin] of Object.entries(def.burn)) {
+            node.buf[res] = Math.max(0, (node.buf[res] ?? 0) - (perMin / 60) * dt);
+          }
+        } else {
+          const fuel = Object.keys(def.fuels).find((res) => (node.buf[res] ?? 0) > 0);
+          if (fuel) node.buf[fuel] = Math.max(0, node.buf[fuel] - (def.powerOut / def.fuels[fuel]) * dt);
         }
         node.status = 'generating';
       } else node.status = 'no fuel';
@@ -348,7 +371,11 @@ export function tick(state, dt, ctx) {
     } else if (def.type === 'hub') {
       node.status = 'online';
     } else if (def.type === 'deposit') {
-      node.status = '';
+      if (node.cat === 'plant') {
+        node.buf.leaves = Math.min(50, (node.buf.leaves ?? 0) + (20 * node.mult / 60) * dt);
+        node.buf.wood = Math.min(50, (node.buf.wood ?? 0) + (5 * node.mult / 60) * dt);
+        node.status = 'growing';
+      } else node.status = '';
     } else if (def.type === 'logistic') {
       node.status = 'ok';
     }
@@ -370,8 +397,10 @@ export function tick(state, dt, ctx) {
     const dstPort = getPort(dst, wire.b.p, ctx);
     if (!srcPort || !dstPort) continue;
     const res = srcPort.res ?? dstPort.res ??
-      Object.keys(src.buf).find((k) => (src.buf[k] > 1e-9) && kindOf(k, ctx) === wire.kind);
+      Object.keys(src.buf).find((k) => src.buf[k] > 1e-9 && kindOf(k, ctx) === wire.kind &&
+        (!dstPort.accepts || dstPort.accepts.includes(k)));
     if (!res || (dstPort.res && dstPort.res !== res)) continue;
+    if (dstPort.accepts && !dstPort.accepts.includes(res)) continue;
     const rate = (wire.kind === 'fluid' ? ctx.pipeRate : ctx.beltRate) / 60;
     const dstDef = ctx.catalog[dst.key];
     const space = dstDef.type === 'hub' ? Infinity

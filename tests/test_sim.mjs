@@ -37,17 +37,28 @@ const smelter = addNode(state, 'smelter', 12, 5, ctx);
 setRecipe(state, smelter, 'iron-ingot', ctx);
 const box = addNode(state, 'storage-container', 20, 5, ctx);
 
-// wiring: power from hub, belt miner->smelter->container
-assert.ok(addWire(state, hub, 'pout', miner, 'pin', ctx), 'power to miner');
-assert.ok(addWire(state, hub, 'pout', smelter, 'pin', ctx), 'power to smelter');
+// bootstrap: plant -> biomass burner -> powers miner
+const plant = addDeposit(state, 'leaves', 'plant', 'normal', 1, 50, 20);
+const burner = addNode(state, 'biomass-burner', 55, 20, ctx);
+assert.ok(addWire(state, plant, 'out0', burner, 'in0', ctx), 'plant belts into burner');
+assert.equal(addWire(state, dep, 'out0', burner, 'in0', ctx), null, 'resource port cannot feed burner');
+assert.ok(addWire(state, burner, 'pout', miner, 'pin', ctx), 'burner powers miner');
+assert.ok(addWire(state, burner, 'pout', smelter, 'pin', ctx), 'power to smelter');
+burner.buf.wood = 50; // pre-stock so power flows immediately; leaves grow slowly
 assert.ok(addWire(state, miner, 'out0', smelter, 'in0', ctx), 'belt miner->smelter');
 assert.ok(addWire(state, smelter, 'out0', box, 'in0', ctx), 'belt smelter->container');
 assert.ok(!canConnect(miner, 'out0', smelter, 'pin', state, ctx), 'kind mismatch rejected');
 assert.ok(!canConnect(miner, 'out0', miner, 'out0', state, ctx), 'self wire rejected');
 
+const burner2 = addNode(state, 'biomass-burner', 60, 25, ctx);
+assert.equal(addWire(state, smelter, 'out0', burner2, 'in0', ctx), null, 'wrong item rejected by accepts');
+
 for (let i = 0; i < 600; i++) tick(state, 0.1, ctx); // 60s
 assert.ok((box.buf['iron-ingot'] ?? 0) > 5, `container has ingots, got ${box.buf['iron-ingot']}`);
 assert.ok(state.power.supply >= 30 && state.power.demand > 0, 'power accounting');
+assert.ok((state.nodes.find((n) => n.id === plant.id).buf.leaves ?? 0) >= 0, 'plant grows');
+assert.equal(ctx.catalog['the-hub'].powerOut, 0, 'hub gives no free power');
+assert.ok(state.power.supply >= 30, 'burner supplies');
 
 // unpowered miner produces nothing
 const dep2 = addDeposit(state, 'copper-ore', 'mineral', 'normal', 1, 30, 30);
@@ -59,7 +70,7 @@ assert.equal(dark.buf['copper-ore'] ?? 0, 0);
 
 // unwired miner has no deposit
 const lonely = addNode(state, 'miner-mk1', 60, 60, ctx);
-assert.ok(addWire(state, hub, 'pout', lonely, 'pin', ctx));
+assert.ok(addWire(state, burner, 'pout', lonely, 'pin', ctx));
 tick(state, 0.1, ctx);
 assert.equal(lonely.status, 'no deposit');
 // removing the resource wire clears the stamp
@@ -71,13 +82,16 @@ assert.equal(miner.depositRes, null);
 {
   const s2 = newGame(7, ctx);
   s2.nodes = s2.nodes.filter((n) => n.key === 'the-hub'); s2.wires = [];
-  const hub2 = s2.nodes[0];
   const d = addDeposit(s2, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
   const m = addNode(s2, 'miner-mk1', 10, 5, ctx);   // 60/min
   const sp = addNode(s2, 'splitter', 16, 5, ctx);
   const boxes = [0, 1, 2].map((i) => addNode(s2, 'storage-container', 20, 3 + i * 3, ctx));
+  const plant2 = addDeposit(s2, 'leaves', 'plant', 'normal', 1, 50, 20);
+  const burner3 = addNode(s2, 'biomass-burner', 55, 20, ctx);
+  addWire(s2, plant2, 'out0', burner3, 'in0', ctx);
+  burner3.buf.wood = 50; // pre-stock so power flows immediately
   addWire(s2, d, 'out0', m, 'res0', ctx);
-  addWire(s2, hub2, 'pout', m, 'pin', ctx);
+  addWire(s2, burner3, 'pout', m, 'pin', ctx);
   addWire(s2, m, 'out0', sp, 'in0', ctx);
   boxes.forEach((b, i) => assert.ok(addWire(s2, sp, 'out' + i, b, 'in0', ctx)));
   for (let i = 0; i < 1200; i++) tick(s2, 0.1, ctx); // 120s

@@ -12,6 +12,7 @@ const DEP_STYLE = {
   mineral: { fill: '#241c14', edge: '#8d6e63' },
   oil: { fill: '#15151c', edge: '#7d7d8f' },
   water: { fill: '#0d2230', edge: '#38bdf8' },
+  plant: { fill: '#12240f', edge: '#7bed9f' },
 };
 
 const canvas = document.getElementById('canvas');
@@ -406,7 +407,9 @@ function refreshInspector() {
     const total = S.portsOf(n, ctx).length;
     box.innerHTML = `<h2>${ctx.names[n.res] ?? n.res}</h2>
       <div class="dim">${n.cat} deposit · ${n.purity} (x${n.mult})</div>
-      <section class="dim">${used}/${total} ports wired</section>`;
+      <section class="dim">${used}/${total} ports wired</section>
+      ${n.cat === 'plant' ? '<section id="bufs"></section>' : ''}`;
+    if (n.cat === 'plant') updateBuffers();
     return;
   }
 
