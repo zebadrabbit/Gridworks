@@ -1,7 +1,7 @@
 // sim.js — pure game logic (no DOM). Source of truth: data/source/satisfactory_data.json
 export const TILE = 32;
-export const WORLD_W = 120;
-export const WORLD_H = 80;
+export const WORLD_W = 240;
+export const WORLD_H = 160;
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -127,8 +127,8 @@ export function genMap(seed, ctx) {
     }
     return 'iron-ore';
   };
-  const free = (x, y) => (Math.abs(HUB_X - x) > 5 || Math.abs(HUB_Y - y) > 5) &&
-    deposits.every((d) => Math.abs(d.x - x) > 5 || Math.abs(d.y - y) > 5);
+  const free = (x, y) => (Math.abs(HUB_X - x) > 8 || Math.abs(HUB_Y - y) > 8) &&
+    deposits.every((d) => Math.abs(d.x - x) > 12 || Math.abs(d.y - y) > 12);
   const scatter = (count, resFn, cat) => {
     for (let i = 0; i < count; i++) {
       for (let tries = 0; tries < 60; tries++) {
