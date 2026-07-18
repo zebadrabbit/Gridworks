@@ -161,7 +161,8 @@ export function newGame(seed, ctx) {
     beltMark: 0, pipeMark: 0, msProgress: {},
     unlocked: { milestone: 0, buildings: [...START_UNLOCKED] } };
   for (const d of genMap(seed, ctx)) addDeposit(state, d.res, d.cat, d.purity, d.mult, d.x, d.y);
-  addNode(state, 'the-hub', HUB_X, HUB_Y, ctx);
+  const hub = addNode(state, 'the-hub', HUB_X, HUB_Y, ctx);
+  hub.fixed = true;
   return state;
 }
 
@@ -319,6 +320,8 @@ function canConnectExisting(aNode, aPort, bNode, bPort, ctx) {
   const pa = getPort(aNode, aPort, ctx), pb = getPort(bNode, bPort, ctx);
   if (!pa || !pb || pa.kind !== pb.kind) return false;
   if (pa.kind !== 'power' && pa.res && pb.res && pa.res !== pb.res) return false;
+  if (pa.accepts && pb.res && !pa.accepts.includes(pb.res)) return false;
+  if (pb.accepts && pa.res && !pb.accepts.includes(pa.res)) return false;
   return true;
 }
 
@@ -448,8 +451,10 @@ export function tick(state, dt, ctx) {
     const dstPort = getPort(dst, wire.b.p, ctx);
     if (!srcPort || !dstPort) continue;
     const res = srcPort.res ?? dstPort.res ??
-      Object.keys(src.buf).find((k) => src.buf[k] > 1e-9 && kindOf(k, ctx) === wire.kind &&
-        (!dstPort.accepts || dstPort.accepts.includes(k)));
+      Object.keys(src.buf)
+        .filter((k) => src.buf[k] > 1e-9 && kindOf(k, ctx) === wire.kind &&
+          (!dstPort.accepts || dstPort.accepts.includes(k)))
+        .reduce((best, k) => (best == null || src.buf[k] > src.buf[best] ? k : best), null);
     if (!res || (dstPort.res && dstPort.res !== res)) continue;
     if (dstPort.accepts && !dstPort.accepts.includes(res)) continue;
     const rate = (wire.kind === 'fluid' ? ctx.pipes[wire.mark ?? 0].rate : ctx.belts[wire.mark ?? 0].rate) / 60;

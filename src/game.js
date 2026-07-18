@@ -382,6 +382,8 @@ function buildPalette() {
     }
     pal.appendChild(g);
   }
+  document.querySelectorAll('.pal-item').forEach((el) =>
+    el.classList.toggle('active', ui.mode === 'place' && el.dataset.key === ui.placeKey));
 }
 
 const fmt = (v) => (v >= 100 ? Math.round(v) : Math.round(v * 10) / 10);
@@ -501,7 +503,15 @@ function save() { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }
 function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const s = JSON.parse(raw);
+      s.msProgress ??= {};
+      s.unlocked ??= { milestone: 0, buildings: [...S.START_UNLOCKED] };
+      s.beltMark ??= 0;
+      s.pipeMark ??= 0;
+      s.shipped ??= {};
+      return s;
+    }
   } catch { /* corrupt save -> new game */ }
   return null;
 }

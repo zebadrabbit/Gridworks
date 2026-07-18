@@ -145,6 +145,20 @@ assert.equal(miner.depositRes, null);
   if (MILESTONES[0].rewards.beltMark != null) assert.equal(s4.beltMark, MILESTONES[0].rewards.beltMark);
 }
 
+// plant deposit -> storage container: wood should not be starved by regenerating leaves
+{
+  const s5 = newGame(13, ctx);
+  s5.nodes = s5.nodes.filter((n) => n.key === 'the-hub'); s5.wires = [];
+  const plant5 = addDeposit(s5, 'leaves', 'plant', 'normal', 1, 50, 20);
+  const box5 = addNode(s5, 'storage-container', 20, 5, ctx);
+  addWire(s5, plant5, 'out0', box5, 'in0', ctx);
+  for (let i = 0; i < 3000; i++) tick(s5, 0.1, ctx); // 5 minutes
+  const leaves = box5.buf.leaves ?? 0;
+  const wood = box5.buf.wood ?? 0;
+  assert.ok(leaves > 1, `container got leaves, got ${leaves}`);
+  assert.ok(wood > 1, `container got wood, got ${wood}`);
+}
+
 // save/load roundtrip
 const restored = JSON.parse(JSON.stringify(state));
 tick(restored, 0.1, ctx);
