@@ -68,22 +68,45 @@ function wireAt(wx, wy) {
   for (const w of state.wires) {
     const ends = wireEnds(w);
     if (!ends) continue;
-    const [p1, p2] = ends;
-    for (let t = 0; t <= 1; t += 0.05) {
-      const q = bezPoint(p1, p2, t);
-      if (Math.hypot(q.x - wx, q.y - wy) < 7 / cam.z + 3) return w;
-    }
+    if (distToPath(wirePath(ends[0], ends[1], w), wx, wy) < 7 / cam.z + 3) return w;
   }
   return null;
 }
-function bezPoint(p1, p2, t) {
+
+function wirePath(p1, p2, w) {
+  if (w?.style === 'straight') return [p1, ...w.pts, p2];
+  // noodle: sample the cubic bezier
   const dx = Math.max(40, Math.abs(p2.x - p1.x) / 2);
   const c1 = { x: p1.x + dx, y: p1.y }, c2 = { x: p2.x - dx, y: p2.y };
-  const u = 1 - t;
-  return {
-    x: u * u * u * p1.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p2.x,
-    y: u * u * u * p1.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p2.y,
-  };
+  const pts = [];
+  const N = 32; // ponytail: fixed sampling, plenty smooth at max zoom 2.5
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, u = 1 - t;
+    pts.push({
+      x: u * u * u * p1.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p2.x,
+      y: u * u * u * p1.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p2.y,
+    });
+  }
+  return pts;
+}
+
+function strokePts(pts) {
+  cx.beginPath();
+  cx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) cx.lineTo(pts[i].x, pts[i].y);
+  cx.stroke();
+}
+
+function distToPath(pts, wx, wy) {
+  let best = Infinity;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const len2 = vx * vx + vy * vy;
+    const t = len2 ? Math.max(0, Math.min(1, ((wx - a.x) * vx + (wy - a.y) * vy) / len2)) : 0;
+    best = Math.min(best, Math.hypot(a.x + t * vx - wx, a.y + t * vy - wy));
+  }
+  return best;
 }
 
 // ----------------------------------------------------------------- rendering
@@ -197,37 +220,37 @@ function selOutline(x, y, w, h) {
   cx.strokeRect(x, y, w, h); cx.setLineDash([]);
 }
 
-function strokeWirePath(p1, p2) {
-  const dx = Math.max(40, Math.abs(p2.x - p1.x) / 2);
-  cx.beginPath();
-  cx.moveTo(p1.x, p1.y);
-  cx.bezierCurveTo(p1.x + dx, p1.y, p2.x - dx, p2.y, p2.x, p2.y);
-  cx.stroke();
-}
-
 function drawWire(w, now) {
   const ends = wireEnds(w);
   if (!ends) return;
-  const [p1, p2] = ends;
+  const pts = wirePath(ends[0], ends[1], w);
   const color = KIND_COLOR[w.kind];
   const selected = ui.sel?.type === 'wire' && ui.sel.id === w.id;
   cx.lineWidth = selected ? 3.5 : (w.kind === 'fluid' ? 3 : 2);
   cx.shadowColor = color; cx.shadowBlur = selected ? 10 : 5;
   if (w.kind === 'power') {
     cx.strokeStyle = color + 'cc';
-    strokeWirePath(p1, p2);
+    strokePts(pts);
   } else {
     cx.strokeStyle = color + '44';
-    strokeWirePath(p1, p2);
+    strokePts(pts);
     if (w.flow > 0) { // marching ants
       cx.strokeStyle = color;
       cx.setLineDash([7, 7]);
       cx.lineDashOffset = -(now / 40) * (1 + (w.mark ?? 0) * 0.4) % 14;
-      strokeWirePath(p1, p2);
+      strokePts(pts);
       cx.setLineDash([]);
     }
   }
   cx.shadowBlur = 0;
+  if (selected && w.style === 'straight') {
+    for (let i = 0; i < w.pts.length; i++) {
+      const p = w.pts[i];
+      const s = 5 / cam.z + 2;
+      cx.fillStyle = ui.sel.wp === i ? '#ffffff' : color;
+      cx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+    }
+  }
 }
 
 function drawWirePreview() {
@@ -238,7 +261,7 @@ function drawWirePreview() {
   const ok = over && S.canConnect(from.node, from.port.id, over.node, over.port.id, state, ctx);
   cx.strokeStyle = ok ? KIND_COLOR[from.port.kind] : (over ? '#ff7675' : KIND_COLOR[from.port.kind] + '66');
   cx.lineWidth = 2; cx.setLineDash([5, 5]);
-  strokeWirePath(p1, over ? portPos(over.node, over.port) : p2);
+  strokePts(wirePath(p1, over ? portPos(over.node, over.port) : p2, null));
   cx.setLineDash([]);
 }
 
