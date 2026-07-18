@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-18 — Wire Styles, Waypoints & Tooltips
+
+- **Per-wire render styles**: belts and pipes render as noodle (bezier curves) by
+  default or straight polylines; toggle the style for the selected wire or set the
+  default for new wires with the `S` keybind. Styles persist in saves.
+- **Waypoint editing on straight wires**: double-click on a straight wire to add a
+  waypoint; drag the waypoint handle to move it; press `Delete` to remove a waypoint
+  before the selected wire.
+- **Hover tooltips for ports and wires**: display resource type and flow rate (items/s
+  or mL/s) for ports under the cursor, and resource type with belt/pipe mark for wires
+  under the cursor. Tooltips update in real time during simulation.
+- Wires with no explicit style or waypoint data normalize to noodle render on load,
+  preserving backward compatibility with older saves.
+
 ## 2026-07-18 — Iteration 2
 
 - **Deposits as wireable nodes**: mineral/oil deposits render as fixed, undeletable
