@@ -164,4 +164,13 @@ const restored = JSON.parse(JSON.stringify(state));
 tick(restored, 0.1, ctx);
 assert.ok(restored.time > state.time, 'restored state ticks');
 
+// wires carry render style + waypoints (persisted, sim-inert)
+const anyWire = state.wires[0];
+assert.equal(anyWire.style, 'noodle', 'new wires default to noodle style');
+assert.deepEqual(anyWire.pts, [], 'new wires start with no waypoints');
+anyWire.style = 'straight'; anyWire.pts = [{ x: 100, y: 200 }];
+const rt = JSON.parse(JSON.stringify(state));
+assert.equal(rt.wires[0].style, 'straight', 'style survives save round-trip');
+assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-trip');
+
 console.log('all sim checks passed');

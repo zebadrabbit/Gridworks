@@ -242,7 +242,7 @@ export function addWire(state, aNode, aPort, bNode, bPort, ctx) {
   // normalize so a = source for item/fluid wires
   let a = { n: aNode.id, p: aPort }, b = { n: bNode.id, p: bPort };
   if (pa.kind !== 'power' && pa.dir === 'in') [a, b] = [b, a];
-  const wire = { id: state.nextId++, a, b, kind: pa.kind, flow: 0 };
+  const wire = { id: state.nextId++, a, b, kind: pa.kind, flow: 0, style: 'noodle', pts: [] };
   if (wire.kind === 'item') wire.mark = state.beltMark ?? 0;
   if (wire.kind === 'fluid') wire.mark = state.pipeMark ?? 0;
   state.wires.push(wire);

@@ -510,6 +510,7 @@ function load() {
       s.beltMark ??= 0;
       s.pipeMark ??= 0;
       s.shipped ??= {};
+      for (const w of s.wires ?? []) { w.style ??= 'noodle'; w.pts ??= []; }
       return s;
     }
   } catch { /* corrupt save -> new game */ }
