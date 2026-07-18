@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# manage.sh — start/stop the static dev server (python3 -m http.server)
+set -euo pipefail
+cd "$(dirname "$0")"
+
+PORT="${PORT:-8889}"  # 8000 = honcho, 8888 also taken on this box
+PID_FILE=.server.pid
+LOG_FILE=.server.log
+
+running() { [[ -f $PID_FILE ]] && kill -0 "$(cat $PID_FILE)" 2>/dev/null; }
+
+case "${1:-}" in
+  start)
+    if running; then echo "already running (pid $(cat $PID_FILE)) on port $PORT"; exit 0; fi
+    nohup python3 -m http.server "$PORT" >"$LOG_FILE" 2>&1 &
+    echo $! >"$PID_FILE"
+    sleep 0.3
+    if ! running; then
+      echo "failed to start (port $PORT busy? try another: PORT=nnnn $0 start):"
+      tail -n 3 "$LOG_FILE"; rm -f "$PID_FILE"; exit 1
+    fi
+    echo "started pid $(cat $PID_FILE) — http://localhost:$PORT"
+    ;;
+  stop)
+    if running; then kill "$(cat $PID_FILE)"; rm -f "$PID_FILE"; echo "stopped"
+    else rm -f "$PID_FILE"; echo "not running"; fi
+    ;;
+  restart)
+    "$0" stop; "$0" start
+    ;;
+  status)
+    if running; then echo "running (pid $(cat $PID_FILE)) — http://localhost:$PORT"
+    else echo "not running"; fi
+    ;;
+  logs)
+    tail -n "${2:-50}" "$LOG_FILE"
+    ;;
+  test)
+    node tests/test_sim.mjs
+    ;;
+  *)
+    echo "usage: $0 {start|stop|restart|status|logs [n]|test}   (PORT=$PORT, override with PORT=nnnn)"
+    exit 1
+    ;;
+esac

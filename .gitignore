@@ -1,0 +1,4 @@
+.server.pid
+.server.log
+.venv/
+.claude/settings.local.json

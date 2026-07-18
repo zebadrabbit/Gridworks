@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gridworks</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>⚡</text></svg>">
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<header id="hud">
+  <span class="logo">GRID<b>WORKS</b></span>
+  <span id="hud-power">⚡ 0 / 0 MW</span>
+  <span id="hud-shipped">📦 0 shipped</span>
+  <span class="spacer"></span>
+  <span id="hud-hint"></span>
+  <button id="btn-reset">New Map</button>
+</header>
+<aside id="palette"></aside>
+<aside id="inspector"><div class="dim">Nothing selected</div></aside>
+<script type="module" src="src/game.js"></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; overflow: hidden; background: #0a0c12; color: #cfd8e3;
+  font: 13px/1.45 'Segoe UI', system-ui, sans-serif; }
+#canvas { position: fixed; inset: 0; display: block; cursor: crosshair; }
+
+#hud { position: fixed; top: 0; left: 0; right: 0; height: 42px; display: flex;
+  align-items: center; gap: 20px; padding: 0 14px; background: rgba(10,13,20,.85);
+  border-bottom: 1px solid #1d2733; backdrop-filter: blur(4px); z-index: 10; }
+#hud .logo { font-weight: 300; letter-spacing: 3px; color: #4dd8ff; }
+#hud .logo b { font-weight: 700; color: #e8f6ff; }
+#hud .spacer { flex: 1; }
+#hud-hint { color: #7a8aa0; font-size: 12px; }
+#hud-power { color: #f4d03f; }
+#hud-shipped { color: #58d68d; }
+
+button { background: #12202c; color: #4dd8ff; border: 1px solid #23445c;
+  border-radius: 4px; padding: 4px 10px; cursor: pointer; font: inherit; }
+button:hover { background: #17324a; }
+button.danger { color: #ff7675; border-color: #5c2323; background: #2c1212; }
+
+aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
+  background: rgba(10,13,20,.88); backdrop-filter: blur(4px); z-index: 10; padding: 10px; }
+#palette { left: 0; border-right: 1px solid #1d2733; }
+#inspector { right: 0; width: 250px; border-left: 1px solid #1d2733; }
+
+.pal-group { margin-bottom: 12px; }
+.pal-group h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+  color: #5b6b80; margin: 6px 2px; }
+.pal-item { display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 8px; margin: 3px 0; border: 1px solid #1d2733; border-radius: 5px;
+  cursor: pointer; background: #0e1420; }
+.pal-item:hover, .pal-item.active { border-color: #4dd8ff; box-shadow: 0 0 8px #4dd8ff44; }
+.pal-item small { color: #5b6b80; }
+
+#inspector h2 { font-size: 15px; margin-bottom: 2px; }
+#inspector .dim { color: #5b6b80; }
+#inspector section { margin: 10px 0; padding-top: 8px; border-top: 1px solid #1d2733; }
+#inspector select { width: 100%; background: #0e1420; color: #cfd8e3;
+  border: 1px solid #23445c; border-radius: 4px; padding: 4px; font: inherit; }
+#inspector .buf { display: flex; justify-content: space-between; font-size: 12px;
+  padding: 1px 0; color: #9fb0c3; }
+.status { font-size: 12px; }
+.status.good { color: #58d68d; } .status.warn { color: #f4d03f; } .status.bad { color: #ff7675; }
