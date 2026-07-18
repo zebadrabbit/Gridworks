@@ -51,3 +51,11 @@ aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
 #milestone .ms-row { font-size: 11px; color: #9fb0c3; margin: 4px 0 2px; display: flex; justify-content: space-between; }
 .ms-bar { background: #152232; height: 6px; border-radius: 3px; margin-bottom: 6px; }
 .ms-bar > i { display: block; height: 6px; border-radius: 3px; background: #4dd8ff; }
+
+#tooltip {
+  position: fixed; pointer-events: none; display: none; z-index: 30;
+  background: rgba(14, 19, 29, 0.95); border: 1px solid #4dd8ff55; border-radius: 5px;
+  padding: 5px 8px; font-size: 12px; color: #cfe8ff; max-width: 240px;
+}
+#tooltip .dim { color: #7f96ad; }
+

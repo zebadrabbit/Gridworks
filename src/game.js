@@ -17,6 +17,9 @@ const DEP_STYLE = {
 
 const canvas = document.getElementById('canvas');
 const cx = canvas.getContext('2d');
+const tip = document.createElement('div');
+tip.id = 'tooltip';
+document.body.appendChild(tip);
 let ctx, state;
 const cam = { x: 0, y: 0, z: 1 };
 const ui = { mode: 'idle', placeKey: null, wireFrom: null, sel: null, hover: null,
@@ -289,6 +292,38 @@ function drawGhost() {
 
 // -------------------------------------------------------------------- input
 
+function updateTooltip(e) {
+  if (ui.drag || ui.mode !== 'idle') { tip.style.display = 'none'; return; }
+  let html = '';
+  const port = portAt(ui.mouse.x, ui.mouse.y);
+  if (port) {
+    const { node, port: p } = port;
+    html = `<b>${p.dir === 'in' ? 'input' : 'output'}</b> · ${p.kind}`;
+    if (p.res) html += `<div class="dim">${ctx.names[p.res] ?? p.res}</div>`;
+    else if (p.accepts) html += `<div class="dim">accepts: ${p.accepts.map((r) => ctx.names[r] ?? r).join(', ')}</div>`;
+    html += `<div class="dim">${ctx.catalog[node.key].name}</div>`;
+  } else {
+    const w = wireAt(ui.mouse.x, ui.mouse.y);
+    if (w) {
+      if (w.kind === 'power') {
+        html = `<b>power line</b>`;
+      } else {
+        const a = state.nodes.find((n) => n.id === w.a.n);
+        const b = state.nodes.find((n) => n.id === w.b.n);
+        const res = (a && S.getPort(a, w.a.p, ctx)?.res) ?? (b && S.getPort(b, w.b.p, ctx)?.res);
+        const markName = w.kind === 'fluid' ? ctx.pipes[w.mark ?? 0]?.name : ctx.belts[w.mark ?? 0]?.name;
+        html = `<b>${res ? (ctx.names[res] ?? res) : 'idle'}</b> · ${Math.round(w.flow * 60)}/min`;
+        if (markName) html += `<div class="dim">${markName}</div>`;
+      }
+    }
+  }
+  if (!html) { tip.style.display = 'none'; return; }
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  tip.style.left = (e.clientX + 14) + 'px';
+  tip.style.top = (e.clientY + 14) + 'px';
+}
+
 canvas.addEventListener('mousedown', (e) => {
   const w = toWorld(e.offsetX, e.offsetY);
   if (e.button === 1 || e.button === 2 || e.ctrlKey) { ui.drag = { pan: true, sx: e.clientX, sy: e.clientY }; return; }
@@ -334,6 +369,7 @@ canvas.addEventListener('mousemove', (e) => {
     const { w, i } = ui.drag.wp;
     w.pts[i] = { x: ui.mouse.x, y: ui.mouse.y };
   }
+  updateTooltip(e);
 });
 
 addEventListener('mouseup', () => {
