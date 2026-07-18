@@ -65,8 +65,8 @@ export function buildCtx(data) {
     catalog, recipesByCat, recipeByKey, names,
     fluids: new Set(data.fluids.map((f) => f.key_name)),
     resources: data.resources,
-    beltRate: data.belts[0].rate,   // 60/min; belt upgrades deferred
-    pipeRate: data.pipes[0].rate,   // 300/min
+    belts: data.belts,
+    pipes: data.pipes,
   };
 }
 
@@ -119,7 +119,8 @@ export function addDeposit(state, res, cat, purity, mult, x, y) {
 }
 
 export function newGame(seed, ctx) {
-  const state = { seed, time: 0, nextId: 1, nodes: [], wires: [], shipped: {} };
+  const state = { seed, time: 0, nextId: 1, nodes: [], wires: [], shipped: {},
+    beltMark: ctx.belts.length - 1, pipeMark: ctx.pipes.length - 1 };
   for (const d of genMap(seed, ctx)) addDeposit(state, d.res, d.cat, d.purity, d.mult, d.x, d.y);
   addNode(state, 'the-hub', Math.floor(WORLD_W / 2) - 2, Math.floor(WORLD_H / 2) - 2, ctx);
   return state;
@@ -202,6 +203,8 @@ export function addWire(state, aNode, aPort, bNode, bPort, ctx) {
   let a = { n: aNode.id, p: aPort }, b = { n: bNode.id, p: bPort };
   if (pa.kind !== 'power' && pa.dir === 'in') [a, b] = [b, a];
   const wire = { id: state.nextId++, a, b, kind: pa.kind, flow: 0 };
+  if (wire.kind === 'item') wire.mark = state.beltMark ?? 0;
+  if (wire.kind === 'fluid') wire.mark = state.pipeMark ?? 0;
   state.wires.push(wire);
   if (wire.kind === 'resource') {
     const src = state.nodes.find((n) => n.id === wire.a.n);
@@ -401,7 +404,7 @@ export function tick(state, dt, ctx) {
         (!dstPort.accepts || dstPort.accepts.includes(k)));
     if (!res || (dstPort.res && dstPort.res !== res)) continue;
     if (dstPort.accepts && !dstPort.accepts.includes(res)) continue;
-    const rate = (wire.kind === 'fluid' ? ctx.pipeRate : ctx.beltRate) / 60;
+    const rate = (wire.kind === 'fluid' ? ctx.pipes[wire.mark ?? 0].rate : ctx.belts[wire.mark ?? 0].rate) / 60;
     const dstDef = ctx.catalog[dst.key];
     const space = dstDef.type === 'hub' ? Infinity
       : dstDef.type === 'store' ? dstDef.cap - bufTotal(dst.buf)

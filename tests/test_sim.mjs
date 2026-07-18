@@ -101,6 +101,28 @@ assert.equal(miner.depositRes, null);
   for (const g of got) assert.ok(Math.abs(g - total / 3) < total * 0.1, `even split ${got}`);
 }
 
+// belt marks: default = highest unlocked, throughput follows ctx.belts[mark].rate
+{
+  const s3 = newGame(9, ctx);
+  s3.nodes = s3.nodes.filter((n) => n.key === 'the-hub'); s3.wires = [];
+  assert.equal(s3.beltMark, ctx.belts.length - 1, 'all marks unlocked pre-milestones');
+  const d = addDeposit(s3, 'iron-ore', 'mineral', 'pure', 2, 5, 5);
+  const m = addNode(s3, 'miner-mk2', 10, 5, ctx); // 120/min base * 2 = 240
+  const box = addNode(s3, 'storage-container', 16, 5, ctx);
+  const plant = addDeposit(s3, 'leaves', 'plant', 'pure', 2, 5, 20);
+  const b = addNode(s3, 'biomass-burner', 10, 20, ctx);
+  addWire(s3, plant, 'out0', b, 'in0', ctx);
+  addWire(s3, b, 'pout', m, 'pin', ctx);
+  addWire(s3, d, 'out0', m, 'res0', ctx);
+  const w = addWire(s3, m, 'out0', box, 'in0', ctx);
+  assert.equal(w.mark, ctx.belts.length - 1);
+  w.mark = 1; // belt2 = 120/min
+  b.buf.wood = 50;
+  for (let i = 0; i < 600; i++) tick(s3, 0.1, ctx);
+  const got = box.buf['iron-ore'] ?? 0;
+  assert.ok(got > 100 && got < 130, `mk2 belt caps at ~120/min, got ${got}`);
+}
+
 // save/load roundtrip
 const restored = JSON.parse(JSON.stringify(state));
 tick(restored, 0.1, ctx);

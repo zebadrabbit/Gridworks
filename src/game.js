@@ -211,7 +211,7 @@ function drawWire(w, now) {
   const [p1, p2] = ends;
   const color = KIND_COLOR[w.kind];
   const selected = ui.sel?.type === 'wire' && ui.sel.id === w.id;
-  cx.lineWidth = selected ? 3.5 : 2;
+  cx.lineWidth = selected ? 3.5 : (w.kind === 'fluid' ? 3 : 2);
   cx.shadowColor = color; cx.shadowBlur = selected ? 10 : 5;
   if (w.kind === 'power') {
     cx.strokeStyle = color + 'cc';
@@ -222,7 +222,7 @@ function drawWire(w, now) {
     if (w.flow > 0) { // marching ants
       cx.strokeStyle = color;
       cx.setLineDash([7, 7]);
-      cx.lineDashOffset = -(now / 40) % 14;
+      cx.lineDashOffset = -(now / 40) * (1 + (w.mark ?? 0) * 0.4) % 14;
       strokeWirePath(p1, p2);
       cx.setLineDash([]);
     }
@@ -391,9 +391,18 @@ function refreshInspector() {
   if (ui.sel.type === 'wire') {
     const w = state.wires.find((q) => q.id === ui.sel.id);
     if (!w) return select(null);
+    const marks = w.kind === 'fluid' ? ctx.pipes : (w.kind === 'item' ? ctx.belts : null);
+    const maxMark = w.kind === 'fluid' ? state.pipeMark : state.beltMark;
+    const markHtml = marks ? `<section><label class="dim">Tier</label><select id="mark">
+      ${Array.from({ length: maxMark + 1 }, (_, i) =>
+        `<option value="${i}" ${w.mark === i ? 'selected' : ''}>${marks[i].rate}/min</option>`).join('')}
+    </select></section>` : '';
     box.innerHTML = `<h2>${w.kind} wire</h2>
       <div class="dim">flow: ${fmt(w.flow * 60)}/min</div>
+      ${markHtml}
       <section><button class="danger" id="del">Delete (Del)</button></section>`;
+    const markSel = box.querySelector('#mark');
+    if (markSel) markSel.onchange = () => { w.mark = +markSel.value; refreshInspector(); };
     box.querySelector('#del').onclick = () => { S.removeWire(state, w.id); select(null); };
     return;
   }
