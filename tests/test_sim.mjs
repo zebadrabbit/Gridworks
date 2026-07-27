@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -172,5 +172,177 @@ anyWire.style = 'straight'; anyWire.pts = [{ x: 100, y: 200 }];
 const rt = JSON.parse(JSON.stringify(state));
 assert.equal(rt.wires[0].style, 'straight', 'style survives save round-trip');
 assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-trip');
+
+// merger: stocked containers feed one belt out at belt rate, items conserved
+{
+  const s6 = newGame(17, ctx);
+  s6.unlocked.buildings = Object.keys(ctx.catalog); s6.beltMark = 0;
+  s6.nodes = s6.nodes.filter((n) => n.key === 'the-hub'); s6.wires = [];
+  const sources = [0, 1, 2].map((i) => addNode(s6, 'storage-container', 5, 3 + i * 3, ctx));
+  for (const src of sources) src.buf['iron-ore'] = 200;
+  const mg = addNode(s6, 'merger', 10, 6, ctx);
+  const sink = addNode(s6, 'storage-container', 14, 6, ctx);
+  sources.forEach((src, i) => assert.ok(addWire(s6, src, 'out0', mg, 'in' + i, ctx), 'source into merger'));
+  assert.ok(addWire(s6, mg, 'out0', sink, 'in0', ctx), 'merger into sink');
+  for (let i = 0; i < 1200; i++) tick(s6, 0.1, ctx); // 120s @ belt1 60/min
+  const got = sink.buf['iron-ore'] ?? 0;
+  assert.ok(got > 100 && got <= 121, `merger passes ~60/min, got ${got}`);
+  const remaining = sources.reduce((a, s) => a + (s.buf['iron-ore'] ?? 0), 0) + (mg.buf['iron-ore'] ?? 0) + got;
+  assert.ok(Math.abs(remaining - 600) < 1, `items conserved through merger, got ${remaining}`);
+}
+
+// pipe splitter: extractor fluid fans out evenly across three buffers
+{
+  const s7 = newGame(19, ctx);
+  s7.unlocked.buildings = Object.keys(ctx.catalog); s7.pipeMark = 0;
+  s7.nodes = s7.nodes.filter((n) => n.key === 'the-hub'); s7.wires = [];
+  const wdep = addDeposit(s7, 'water', 'water', 'normal', 1, 5, 5);
+  const pump = addNode(s7, 'water-extractor', 10, 5, ctx);
+  const sp = addNode(s7, 'pipe-splitter', 14, 5, ctx);
+  const tanks = [0, 1, 2].map((i) => addNode(s7, 'fluid-buffer', 18, 3 + i * 3, ctx));
+  const burner = addNode(s7, 'biomass-burner', 10, 12, ctx);
+  burner.buf.wood = 50;
+  assert.ok(addWire(s7, wdep, 'out0', pump, 'res0', ctx));
+  assert.ok(addWire(s7, burner, 'pout', pump, 'pin', ctx));
+  assert.ok(addWire(s7, pump, 'out0', sp, 'in0', ctx), 'pump into pipe splitter');
+  tanks.forEach((t, i) => assert.ok(addWire(s7, sp, 'out' + i, t, 'in0', ctx)));
+  for (let i = 0; i < 1200; i++) tick(s7, 0.1, ctx); // 120s @ 120/min extraction
+  const got = tanks.map((t) => t.buf.water ?? 0);
+  const total = got.reduce((a, v) => a + v, 0);
+  assert.ok(total > 100, `pipe splitter throughput ${total}`);
+  for (const g of got) assert.ok(Math.abs(g - total / 3) < total * 0.1, `even fluid split ${got}`);
+}
+
+// coal generator: burns coal + water together, stops when either runs out
+{
+  const s8 = newGame(23, ctx);
+  s8.unlocked.buildings = Object.keys(ctx.catalog);
+  s8.nodes = s8.nodes.filter((n) => n.key === 'the-hub'); s8.wires = [];
+  const dep = addDeposit(s8, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const m = addNode(s8, 'miner-mk1', 10, 5, ctx);
+  const gen = addNode(s8, 'coal-generator', 10, 10, ctx);
+  gen.buf.coal = 2; gen.buf.water = 200; // 15 coal/min -> exhausted after ~8s
+  assert.ok(addWire(s8, dep, 'out0', m, 'res0', ctx));
+  assert.ok(addWire(s8, gen, 'pout', m, 'pin', ctx));
+  for (let i = 0; i < 50; i++) tick(s8, 0.1, ctx); // 5s: still burning
+  assert.equal(gen.status, 'generating');
+  assert.equal(m.status, 'mining');
+  assert.ok(gen.buf.coal < 2 && gen.buf.water < 200, 'both burn resources deplete');
+  for (let i = 0; i < 150; i++) tick(s8, 0.1, ctx); // 20s total: coal gone
+  assert.equal(gen.status, 'no fuel');
+  assert.equal(m.status, 'no power');
+}
+
+// power throttling: supply/demand ratio < 1 slows machines proportionally
+{
+  const s9 = newGame(27, ctx);
+  s9.unlocked.buildings = Object.keys(ctx.catalog);
+  s9.nodes = s9.nodes.filter((n) => n.key === 'the-hub'); s9.wires = [];
+  const dep = addDeposit(s9, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const m = addNode(s9, 'miner-mk1', 10, 5, ctx);
+  const hog = addNode(s9, 'accelerator', 10, 10, ctx); // big idle draw drags the ratio down
+  const burner = addNode(s9, 'biomass-burner', 16, 10, ctx);
+  burner.buf.wood = 50;
+  assert.ok(addWire(s9, dep, 'out0', m, 'res0', ctx));
+  assert.ok(addWire(s9, burner, 'pout', m, 'pin', ctx));
+  assert.ok(addWire(s9, burner, 'pout', hog, 'pin', ctx));
+  for (let i = 0; i < 600; i++) tick(s9, 0.1, ctx); // 60s
+  const ratio = 30 / (ctx.catalog['miner-mk1'].draw + ctx.catalog['accelerator'].draw);
+  assert.ok(ratio < 1, 'network is actually oversubscribed');
+  const expected = 60 * ratio; // 60/min miner for 60s, throttled
+  const got = m.buf['iron-ore'] ?? 0;
+  assert.ok(Math.abs(got - expected) < 0.5, `throttled mining ~${expected.toFixed(2)}, got ${got}`);
+}
+
+// setRecipe drops wires that no longer match, keeps ones that still do
+{
+  const s10 = newGame(29, ctx);
+  s10.unlocked.buildings = Object.keys(ctx.catalog);
+  s10.nodes = s10.nodes.filter((n) => n.key === 'the-hub'); s10.wires = [];
+  const dep = addDeposit(s10, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const m = addNode(s10, 'miner-mk1', 10, 5, ctx);
+  const sm = addNode(s10, 'smelter', 14, 5, ctx);
+  const box = addNode(s10, 'storage-container', 20, 5, ctx);
+  setRecipe(s10, sm, 'iron-ingot', ctx);
+  assert.ok(addWire(s10, dep, 'out0', m, 'res0', ctx));
+  assert.ok(addWire(s10, m, 'out0', sm, 'in0', ctx), 'ore into smelter');
+  assert.ok(addWire(s10, sm, 'out0', box, 'in0', ctx), 'ingots into container');
+  setRecipe(s10, sm, 'copper-ingot', ctx);
+  assert.ok(!s10.wires.some((w) => w.a.n === m.id && w.b.n === sm.id), 'mismatched input wire dropped');
+  assert.ok(s10.wires.some((w) => w.a.n === sm.id && w.b.n === box.id), 'container output wire kept');
+}
+
+// nuclear plant parked at output-full must not supply power (no fuel is consumed there)
+{
+  const s11 = newGame(31, ctx);
+  s11.unlocked.buildings = Object.keys(ctx.catalog);
+  s11.nodes = s11.nodes.filter((n) => n.key === 'the-hub'); s11.wires = [];
+  const dep = addDeposit(s11, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const m = addNode(s11, 'miner-mk1', 10, 5, ctx);
+  const npp = addNode(s11, 'nuclear-power-plant', 10, 10, ctx);
+  assert.ok(addWire(s11, dep, 'out0', m, 'res0', ctx));
+  assert.ok(addWire(s11, npp, 'pout', m, 'pin', ctx));
+  npp.progress = 0.5; // mid-reaction: supplies
+  tick(s11, 0.1, ctx);
+  assert.equal(m.status, 'mining', 'reacting plant powers the miner');
+  npp.progress = 1; // parked: waste output full, consuming nothing
+  tick(s11, 0.1, ctx);
+  assert.equal(m.status, 'no power', 'output-blocked plant supplies nothing');
+}
+
+// milestone ladder reachability: every cost item is producible with only the
+// buildings unlocked before that milestone (raw resources via unlocked miner
+// categories, leaves/wood via plant deposits, everything else via recipes)
+{
+  const producible = (item, cats, minerCats, visiting = new Set()) => {
+    if (visiting.has(item)) return false;
+    const res = ctx.resources.find((r) => r.key_name === item);
+    if (res) return minerCats.has(res.category);
+    if (item === 'leaves' || item === 'wood') return true;
+    visiting.add(item);
+    const ok = data.recipes.some((r) => cats.has(r.category) &&
+      r.products.some(([p]) => p === item) &&
+      r.ingredients.every(([i]) => producible(i, cats, minerCats, visiting)));
+    visiting.delete(item);
+    return ok;
+  };
+  const unlocked = [...START_UNLOCKED];
+  for (const ms of MILESTONES) {
+    const cats = new Set(unlocked.map((k) => ctx.catalog[k].cat).filter(Boolean));
+    const minerCats = new Set(unlocked.filter((k) => ctx.catalog[k].type === 'miner')
+      .map((k) => ctx.catalog[k].minerCat));
+    for (const item of Object.keys(ms.cost)) {
+      assert.ok(producible(item, cats, minerCats), `${ms.name}: ${item} is producible when the milestone is active`);
+    }
+    unlocked.push(...(ms.rewards.buildings ?? []));
+  }
+}
+
+// normalizeSave: fills defaults, drops unknown keys and their wires, strips transients
+{
+  const s12 = newGame(33, ctx);
+  const hub12 = s12.nodes.find((n) => n.key === 'the-hub');
+  const raw = JSON.parse(JSON.stringify(s12));
+  delete raw.msProgress; delete raw.unlocked; delete raw.beltMark; delete raw.pipeMark; delete raw.shipped;
+  raw.nodes.push({ id: 9999, key: 'gone-building', x: 1, y: 1, buf: {} });
+  raw.wires.push({ id: 10000, a: { n: 9999, p: 'out0' }, b: { n: hub12.id, p: 'in0' }, kind: 'item' });
+  raw.wires.push({ id: 10001, a: { n: raw.nodes[0].id, p: 'out0' }, b: { n: hub12.id, p: 'in0' }, kind: 'item' });
+  raw.nodes[0]._net = 123;
+  const norm = normalizeSave(raw, ctx);
+  assert.ok(norm, 'normalizeSave returns a usable state');
+  assert.ok(!norm.nodes.some((n) => n.key === 'gone-building'), 'unknown-key node dropped');
+  assert.ok(!norm.wires.some((w) => w.a.n === 9999 || w.b.n === 9999), 'wire to dropped node removed');
+  assert.ok(norm.wires.some((w) => w.id === 10001), 'wire between surviving nodes kept');
+  const kept = norm.wires.find((w) => w.id === 10001);
+  assert.equal(kept.style, 'noodle', 'missing style normalized');
+  assert.deepEqual(kept.pts, [], 'missing pts normalized');
+  assert.ok(!('_net' in norm.nodes[0]), 'transient _net stripped');
+  assert.equal(norm.beltMark, 0);
+  assert.deepEqual(norm.msProgress, {});
+  assert.ok(norm.unlocked.buildings.includes('miner-mk1'), 'default unlocks filled');
+  assert.equal(normalizeSave(null, ctx), null, 'null save rejected');
+  assert.equal(normalizeSave({}, ctx), null, 'shapeless save rejected');
+  assert.equal(normalizeSave({ nodes: [], wires: [] }, ctx), null, 'hubless save rejected');
+}
 
 console.log('all sim checks passed');

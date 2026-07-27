@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-07-27 — Repo review cleanup
+
+- **Docs**: pre-rebuild Flask-era docs (`DATA_PIPELINE.md`, `ENTITIES_CONTRACT.md`, the
+  2026-06-21 frontend-shell spec/plan) archived to `docs/history/` with historical
+  headers; `docs/SOURCE_OF_TRUTH.md` rewritten for the static app; README gains
+  prerequisites and Windows notes.
+- **Tooling**: `manage.sh` probes `python3`/`python`/`py` (skipping the fake Windows
+  Store python); GitHub Actions runs `tests/test_sim.mjs` on push/PR; MIT LICENSE added.
+- `fix:` a machine parked at "output full" no longer counts as a power supplier — a
+  nuclear plant with a full waste output previously generated 2500 MW forever on zero
+  fuel.
+- `fix:` save loading goes through a new pure `normalizeSave()` in sim.js: nodes/wires
+  whose keys are missing from the catalog are dropped instead of crashing the app at
+  first render, defaults are filled, and transient `_net` is no longer persisted. The
+  wire-drag preview now honors the S-toggled default style.
+- **Tests**: merger throughput + conservation, pipe-splitter even fluid split, coal
+  generator dual-resource burn and exhaustion, power throttling ratio < 1, `setRecipe`
+  wire-dropping, milestone-ladder reachability (recursive producibility check per
+  milestone), and `normalizeSave`.
+
 ## 2026-07-18 — Wire Styles, Waypoints & Tooltips
 
 - **Per-wire render styles**: belts and pipes render as noodle (bezier curves) by

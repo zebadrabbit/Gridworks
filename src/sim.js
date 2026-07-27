@@ -325,6 +325,29 @@ function canConnectExisting(aNode, aPort, bNode, bPort, ctx) {
   return true;
 }
 
+// ------------------------------------------------------------------ save load
+
+// Normalize a parsed save: fill defaults added since the save was written and drop
+// nodes/wires whose defs no longer exist in the catalog (the data JSON is immutable,
+// but EXTRA_DEFS/catalog keys can evolve). Returns null if the save is unusable.
+export function normalizeSave(raw, ctx) {
+  if (!raw || !Array.isArray(raw.nodes) || !Array.isArray(raw.wires)) return null;
+  const s = raw;
+  s.msProgress ??= {};
+  s.unlocked ??= { milestone: 0, buildings: [...START_UNLOCKED] };
+  s.unlocked.buildings = s.unlocked.buildings.filter((k) => ctx.catalog[k]);
+  s.beltMark ??= 0;
+  s.pipeMark ??= 0;
+  s.shipped ??= {};
+  s.nodes = s.nodes.filter((n) => ctx.catalog[n.key]);
+  const ids = new Set(s.nodes.map((n) => n.id));
+  s.wires = s.wires.filter((w) => ids.has(w.a.n) && ids.has(w.b.n));
+  for (const w of s.wires) { w.style ??= 'noodle'; w.pts ??= []; }
+  for (const n of s.nodes) delete n._net;
+  if (!s.nodes.some((n) => n.key === 'the-hub')) return null;
+  return s;
+}
+
 // ----------------------------------------------------------------------- tick
 
 const BUF_CAP = 100; // per-resource cap for miner/machine/generator buffers
@@ -354,7 +377,9 @@ function supplying(node, def) {
       ? Object.keys(def.burn).every((res) => (node.buf[res] ?? 0) > 0)
       : Object.keys(def.fuels).some((res) => (node.buf[res] ?? 0) > 0);
   }
-  if (def.powerOut > 0) return node.progress > 0; // nuclear plant supplies while reacting
+  // nuclear plant supplies while reacting; progress parks at exactly 1 when the waste
+  // output is full — no fuel is consumed in that state, so it must not supply either
+  if (def.powerOut > 0) return node.progress > 0 && node.progress < 1;
   return false;
 }
 

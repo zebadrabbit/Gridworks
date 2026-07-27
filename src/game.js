@@ -274,7 +274,7 @@ function drawWirePreview() {
   const ok = over && S.canConnect(from.node, from.port.id, over.node, over.port.id, state, ctx);
   cx.strokeStyle = ok ? KIND_COLOR[from.port.kind] : (over ? '#ff7675' : KIND_COLOR[from.port.kind] + '66');
   cx.lineWidth = 2; cx.setLineDash([5, 5]);
-  strokePts(wirePath(p1, over ? portPos(over.node, over.port) : p2, null));
+  strokePts(wirePath(p1, over ? portPos(over.node, over.port) : p2, { style: ui.wireStyle, pts: [] }));
   cx.setLineDash([]);
 }
 
@@ -610,20 +610,13 @@ function updateHud() {
 
 // --------------------------------------------------------------- persistence
 
-function save() { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }
+function save() {
+  localStorage.setItem(SAVE_KEY, JSON.stringify(state, (k, v) => (k === '_net' ? undefined : v)));
+}
 function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) {
-      const s = JSON.parse(raw);
-      s.msProgress ??= {};
-      s.unlocked ??= { milestone: 0, buildings: [...S.START_UNLOCKED] };
-      s.beltMark ??= 0;
-      s.pipeMark ??= 0;
-      s.shipped ??= {};
-      for (const w of s.wires ?? []) { w.style ??= 'noodle'; w.pts ??= []; }
-      return s;
-    }
+    if (raw) return S.normalizeSave(JSON.parse(raw), ctx);
   } catch { /* corrupt save -> new game */ }
   return null;
 }
