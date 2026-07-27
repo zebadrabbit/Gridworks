@@ -1,5 +1,8 @@
 # Gridworks Resurrection — Phase 1: Frontend Node-Graph Shell
 
+> **Historical** — this Flask + React resurrection path was abandoned when the codebase was
+> lost; the 2026-07-16 static rebuild replaced it. Kept for reference only.
+
 ## Context
 
 Gridworks is a Satisfactory-themed idle game in the style of Upload Labs (place nodes, wire

@@ -1,5 +1,8 @@
 # Frontend Node-Graph Shell Implementation Plan
 
+> **Historical** — this Flask + React resurrection path was abandoned when the codebase was
+> lost; the 2026-07-16 static rebuild replaced it. Kept for reference only.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Stand up a new React + TypeScript + Vite frontend with a connector-and-wire canvas (React Flow) for placing Satisfactory buildings/miners and wiring their ports, backed by a new Flask endpoint that serves `docs/satisfactory_data.v1.json` directly. No simulation, no persistence — visual sandbox only.

@@ -1,30 +1,39 @@
 # Source of Truth Policy (Gridworks)
 
-Gridworks has a strict source-of-truth policy for gameplay/runtime content.
-
-## Raw Satisfactory dataset (pipeline source of truth)
-
-- The derivation tools read from the path configured in `data/source/source_of_truth.json`.
-- The configured file should be a versioned snapshot like `data/source/satisfactory_data.v1.json`.
-- Never overwrite an existing version in-place; create `data/source/satisfactory_data.v2.json` and update `data/source/source_of_truth.json`.
-
-Fallback: if the config file is missing/invalid, tools default to `data/source/satisfactory_data.json` (legacy default; do not edit in-place).
-
-## Authored data file (not used by this pipeline)
-
-`data/entities.json` is **human-owned content** but is not used for the satisfactory-derived runtime pipeline.
+`data/source/satisfactory_data.json` is the **immutable source of truth** for all
+gameplay content: items, fluids, resources (with map-gen weights), recipes, miners,
+buildings, belts, and pipes. The browser fetches it directly at startup
+(`game.js` → `buildCtx()` in `src/sim.js`); there is no backend, build step, or
+derivation pipeline.
 
 ## Rules
 
-- Do not add, remove, or modify `tiers`, `items`, `entities`, `resources`, or `recipes` in `data/entities.json` unless a prompt explicitly instructs the exact content changes.
-- UI screenshots or visual references are **not** permission to invent example entities.
-- Validation should be strict and should fail loudly (but not crash the server) when `data/entities.json` violates the contract.
+- **Never edit `data/source/satisfactory_data.json` in place.** If the dataset ever
+  needs to change, add a versioned snapshot (e.g. `satisfactory_data.v2.json`) and
+  update the fetch path deliberately — with save-compatibility in mind (`normalizeSave`
+  drops entities whose keys no longer exist in the catalog).
+- Do not invent items, recipes, or stats. UI screenshots or visual references are not
+  permission to add example content.
 
-## Copilot restrictions
+## Stats not present in the JSON
 
-- Copilot may implement code that *reads, validates, and renders* `data/entities.json`.
-- Copilot may not silently mutate `data/entities.json` content “to make the UI nicer”.
+Some gameplay stats have no equivalent in the source JSON and are hardcoded in
+`src/sim.js` with a comment citing their origin:
 
-## Mock UI data
+- `EXTRA_DEFS` — storage container, fluid buffer, coal/fuel/biomass generators, the
+  HUB, deposits, splitters/mergers. Generator and burner-fuel numbers come from the
+  Satisfactory wiki (satisfactory.fandom.com); plant-deposit emission rates are
+  invented for idle pacing.
+- `MILESTONES` — a hand-rolled 7-milestone ladder shaped after the wiki's early tiers;
+  costs are idle-scaled guesses and free to tune. Every item/building key is validated
+  against the JSON at load (`validateMilestones`) and bad keys throw.
+- `DRAW_OVERRIDE` — power draw for buildings whose JSON lists `power: 0` but which
+  draw variable power in-game.
 
-If UI development needs placeholder content, create it in `static/js/mock_ui_examples.js` and ensure it is not used by the simulation/content data path and does not affect `/api/entities`.
+When adding stats of this kind, keep them in `sim.js` constants with a source comment —
+do not patch the JSON.
+
+## History
+
+The pre-2026-07-16 Flask codebase had a derivation pipeline (`data/derived/`,
+`data/entities.json`, `/api/*`); those policies are archived in `docs/history/`.

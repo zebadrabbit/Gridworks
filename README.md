@@ -25,6 +25,14 @@ data/source/        source-of-truth JSON (immutable)
 docs/               design specs, data policies
 ```
 
+## Prerequisites
+
+- **Serving the game**: any static file server. `manage.sh` uses Python's
+  (`python3`, `python`, or `py` — whichever exists) and needs a bash shell
+  (Git Bash works on Windows).
+- **Tests**: [Node.js](https://nodejs.org) (any recent version). CI runs them on
+  every push, so a local install is optional.
+
 ## Run
 
 ```bash
@@ -33,6 +41,9 @@ docs/               design specs, data policies
 ./manage.sh logs         # tail the server log
 ./manage.sh stop
 ```
+
+Windows without bash: run `python -m http.server 8889` from the repo root and open
+http://localhost:8889.
 
 No build step, no backend — the browser fetches the data JSON directly. Progress
 autosaves to localStorage; "New Map" regenerates the world.
@@ -43,9 +54,12 @@ autosaves to localStorage; "New Map" regenerates the world.
 ./manage.sh test         # runs node tests/test_sim.mjs
 ```
 
+Tests also run in CI (GitHub Actions) on every push and pull request.
+
 ## Docs
 
 - `docs/superpowers/specs/2026-07-18-iteration-2-design.md` — current design (deposit
   nodes, biomass bootstrap, milestones, belt/pipe marks, splitters/mergers)
 - `docs/superpowers/specs/2026-07-15-grid-idler-rebuild.md` — current build design + deferred work
-- `docs/DATA_PIPELINE.md`, `data/ENTITIES_CONTRACT.md` — data policies (predate the rebuild)
+- `docs/SOURCE_OF_TRUTH.md` — data policy (immutable source JSON, hardcoded wiki stats)
+- `docs/history/` — docs for the lost pre-rebuild Flask codebase, kept for reference

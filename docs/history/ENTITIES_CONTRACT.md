@@ -1,5 +1,9 @@
 # Gridworks derived entities — Data Contract
 
+> **Historical** — describes the pre-2026-07-16 Flask codebase (`data/derived/`,
+> `data/entities.json`), which was lost. Kept for reference only; the current app reads
+> `data/source/satisfactory_data.json` directly (see `docs/SOURCE_OF_TRUTH.md`).
+
 Gridworks runtime content is served from `data/derived/entities_derived.json`.
 
 Important constraints:

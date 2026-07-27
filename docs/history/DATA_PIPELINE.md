@@ -1,5 +1,9 @@
 # Data Pipeline (Gridworks)
 
+> **Historical** — describes the pre-2026-07-16 Flask codebase (`tools/`, `data/derived/`,
+> `/api/*`), which was lost. Kept for reference only; the current app is a static rebuild
+> with no derivation pipeline (see the repo README and `docs/SOURCE_OF_TRUTH.md`).
+
 ## Immutable source of truth
 
 - The pipeline reads the raw Satisfactory dataset from a **configured source-of-truth path** in `data/source/source_of_truth.json`.
