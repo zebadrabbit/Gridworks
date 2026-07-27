@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-07-27 — Offline Progress, Space Elevator & QoL
+
+- **Offline progress**: saves stamp `savedAt`; on load, away time (capped at 8h) is
+  simulated in 0.5s steps by a new pure `simulateOffline()` in sim.js, with a
+  welcome-back toast summarizing time simulated and items shipped while away.
+- **Space Elevator end-goal**: unlocked by the final 'High Tech' milestone; a 4-tile
+  sink node accepting only Project Assembly parts (smart plating, versatile
+  framework, automated wiring, modular engine, adaptive control unit — all real JSON
+  items). Ship 4 wiki-shaped phases (idle-scaled costs, tune freely) to win; the
+  milestone panel tracks the active phase after the HUB ladder and toasts each phase
+  and the victory.
+- **QoL**: HUD shows the map seed; "New Map" prompts for a seed (blank = random,
+  strings hashed) so maps are shareable; save export/import as JSON (imports run
+  through `normalizeSave`, invalid files rejected); pause (⏸/Space) and sim-speed
+  (1x/2x/4x) controls. New-map/import now rebuild the palette and milestone panel
+  immediately (previously stale until the next milestone change).
+- Tests: offline-vs-online equivalence and cap, seed determinism, elevator unlock/
+  phases/accepts-filter/victory, project-part reachability post-ladder, elevator
+  save normalization.
+
 ## 2026-07-27 — Repo review cleanup
 
 - **Docs**: pre-rebuild Flask-era docs (`DATA_PIPELINE.md`, `ENTITIES_CONTRACT.md`, the

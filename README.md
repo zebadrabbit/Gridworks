@@ -5,7 +5,9 @@ nodes you wire to miners, machines, containers, and power on a neon grid, and wa
 resources flow. Bootstrap power comes from plant deposits feeding a biomass burner (the
 HUB itself has no free power); ship items into the HUB to climb a 7-milestone ladder
 that unlocks buildings and higher belt/pipe marks; splitters and mergers fan wires out
-and back in with per-tick fair-share distribution.
+and back in with per-tick fair-share distribution. The ladder ends at the Space
+Elevator: ship Project Assembly parts through 4 phases to win. Progress keeps
+accruing while the tab is closed (offline progress, capped at 8h).
 
 `data/source/satisfactory_data.json` is the immutable source of truth for all items,
 buildings, recipes, and resource weights (see `docs/SOURCE_OF_TRUTH.md`).
@@ -58,6 +60,8 @@ Tests also run in CI (GitHub Actions) on every push and pull request.
 
 ## Docs
 
+- `docs/superpowers/specs/2026-07-27-*.md` — offline progress, QoL (seed/save/pause),
+  space elevator end-goal
 - `docs/superpowers/specs/2026-07-18-iteration-2-design.md` — current design (deposit
   nodes, biomass bootstrap, milestones, belt/pipe marks, splitters/mergers)
 - `docs/superpowers/specs/2026-07-15-grid-idler-rebuild.md` — current build design + deferred work

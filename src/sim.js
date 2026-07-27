@@ -26,6 +26,7 @@ const EXTRA_DEFS = {
   'biomass-burner': { name: 'Biomass Burner', type: 'generator', powerOut: 30, size: 2,
     fuels: { leaves: 15, wood: 100, mycelia: 20, biomass: 180, 'solid-biofuel': 450 } },
   'the-hub': { name: 'The HUB', type: 'hub', powerOut: 0, size: 4 },
+  'space-elevator': { name: 'Space Elevator', type: 'elevator', size: 4 },
   'deposit': { name: 'Deposit', type: 'deposit', size: 2 },
   splitter: { name: 'Splitter', type: 'logistic', lkind: 'item', nIn: 1, nOut: 3, size: 1 },
   merger: { name: 'Merger', type: 'logistic', lkind: 'item', nIn: 3, nOut: 1, size: 1 },
@@ -53,13 +54,26 @@ export const MILESTONES = [
   { name: 'Advanced Manufacturing', cost: { plastic: 200, rubber: 200, 'modular-frame': 25 },
     rewards: { buildings: ['manufacturer', 'miner-mk3'], beltMark: 4 } },
   { name: 'High Tech', cost: { computer: 50, 'smart-plating': 20 },
-    rewards: { buildings: ['blender', 'nuclear-power-plant', 'accelerator', 'converter', 'quantum-encoder'], beltMark: 5 } },
+    rewards: { buildings: ['blender', 'nuclear-power-plant', 'accelerator', 'converter', 'quantum-encoder', 'space-elevator'], beltMark: 5 } },
 ];
+
+// ponytail: end-goal shaped after the wiki's Project Assembly phases; counts are
+// idle-scaled guesses, tune freely. Item keys validated against the JSON at load.
+export const ELEVATOR_PHASES = [
+  { name: 'Platform', cost: { 'smart-plating': 50 } },
+  { name: 'Construction', cost: { 'smart-plating': 100, 'versatile-framework': 100 } },
+  { name: 'Systems', cost: { 'versatile-framework': 200, 'automated-wiring': 100, 'modular-engine': 50 } },
+  { name: 'Assembly', cost: { 'modular-engine': 100, 'adaptive-control-unit': 50 } },
+];
+export const ELEVATOR_ITEMS = [...new Set(ELEVATOR_PHASES.flatMap((p) => Object.keys(p.cost)))];
 
 export function validateMilestones(ctx) {
   for (const m of MILESTONES) {
     for (const res of Object.keys(m.cost)) if (!ctx.names[res]) throw new Error(`milestone ${m.name}: unknown item ${res}`);
     for (const b of m.rewards.buildings ?? []) if (!ctx.catalog[b]) throw new Error(`milestone ${m.name}: unknown building ${b}`);
+  }
+  for (const p of ELEVATOR_PHASES) {
+    for (const res of Object.keys(p.cost)) if (!ctx.names[res]) throw new Error(`elevator phase ${p.name}: unknown item ${res}`);
   }
 }
 
@@ -159,6 +173,7 @@ export function addDeposit(state, res, cat, purity, mult, x, y) {
 export function newGame(seed, ctx) {
   const state = { seed, time: 0, nextId: 1, nodes: [], wires: [], shipped: {},
     beltMark: 0, pipeMark: 0, msProgress: {},
+    elevator: { phase: 0, progress: {} },
     unlocked: { milestone: 0, buildings: [...START_UNLOCKED] } };
   for (const d of genMap(seed, ctx)) addDeposit(state, d.res, d.cat, d.purity, d.mult, d.x, d.y);
   const hub = addNode(state, 'the-hub', HUB_X, HUB_Y, ctx);
@@ -196,6 +211,9 @@ export function portsOf(node, ctx) {
   } else if (def.type === 'hub') {
     inP('in0', 'item', null, 0);
     inP('in1', 'fluid', null, 1);
+  } else if (def.type === 'elevator') {
+    ports.push({ id: 'in0', dir: 'in', kind: 'item', res: null, side: 'W', idx: 0,
+                 accepts: ELEVATOR_ITEMS });
   } else if (def.type === 'logistic') {
     for (let i = 0; i < def.nIn; i++) inP('in' + i, def.lkind, null, i);
     for (let i = 0; i < def.nOut; i++) outP('out' + i, def.lkind, null, i);
@@ -339,6 +357,7 @@ export function normalizeSave(raw, ctx) {
   s.beltMark ??= 0;
   s.pipeMark ??= 0;
   s.shipped ??= {};
+  s.elevator ??= { phase: 0, progress: {} };
   s.nodes = s.nodes.filter((n) => ctx.catalog[n.key]);
   const ids = new Set(s.nodes.map((n) => n.id));
   s.wires = s.wires.filter((w) => ids.has(w.a.n) && ids.has(w.b.n));
@@ -346,6 +365,20 @@ export function normalizeSave(raw, ctx) {
   for (const n of s.nodes) delete n._net;
   if (!s.nodes.some((n) => n.key === 'the-hub')) return null;
   return s;
+}
+
+// ----------------------------------------------------------- offline progress
+
+export const OFFLINE_CAP = 8 * 3600; // max seconds of away time credited
+// 0.5s steps are safe: everything but crafting is linear in dt, and the shortest
+// recipe is 2s, so machines still start at most one craft per step without loss
+export const OFFLINE_STEP = 0.5;
+
+// Simulate `seconds` of away time (clamped to OFFLINE_CAP); returns seconds simulated.
+export function simulateOffline(state, seconds, ctx) {
+  const steps = Math.floor(Math.min(Math.max(0, seconds), OFFLINE_CAP) / OFFLINE_STEP);
+  for (let i = 0; i < steps; i++) tick(state, OFFLINE_STEP, ctx);
+  return steps * OFFLINE_STEP;
 }
 
 // ----------------------------------------------------------------------- tick
@@ -449,6 +482,14 @@ export function tick(state, dt, ctx) {
         state.msProgress = {};
         state.unlocked.milestone++;
       }
+    } else if (def.type === 'elevator') {
+      const ph = ELEVATOR_PHASES[state.elevator?.phase ?? 0];
+      if (!ph) { node.status = 'Project Assembly complete'; continue; }
+      node.status = `phase ${state.elevator.phase + 1}: ${ph.name}`;
+      if (Object.entries(ph.cost).every(([res, amt]) => (state.elevator.progress[res] ?? 0) >= amt)) {
+        state.elevator.phase++;
+        state.elevator.progress = {};
+      }
     } else if (def.type === 'deposit') {
       if (node.cat === 'plant') {
         node.buf.leaves = Math.min(50, (node.buf.leaves ?? 0) + (20 * node.mult / 60) * dt);
@@ -484,7 +525,7 @@ export function tick(state, dt, ctx) {
     if (dstPort.accepts && !dstPort.accepts.includes(res)) continue;
     const rate = (wire.kind === 'fluid' ? ctx.pipes[wire.mark ?? 0].rate : ctx.belts[wire.mark ?? 0].rate) / 60;
     const dstDef = ctx.catalog[dst.key];
-    const space = dstDef.type === 'hub' ? Infinity
+    const space = dstDef.type === 'hub' || dstDef.type === 'elevator' ? Infinity
       : dstDef.type === 'store' ? dstDef.cap - bufTotal(dst.buf)
       : BUF_CAP - (dst.buf[res] ?? 0);
     // ponytail: proportional split each tick, not whole-unit round-robin — same steady-state rates
@@ -496,6 +537,9 @@ export function tick(state, dt, ctx) {
     if (dstDef.type === 'hub') {
       state.shipped[res] = (state.shipped[res] ?? 0) + amt;
       state.msProgress[res] = (state.msProgress[res] ?? 0) + amt;
+    } else if (dstDef.type === 'elevator') {
+      state.shipped[res] = (state.shipped[res] ?? 0) + amt;
+      state.elevator.progress[res] = (state.elevator.progress[res] ?? 0) + amt;
     } else dst.buf[res] = (dst.buf[res] ?? 0) + amt;
     wire.flow = amt / dt;
   }

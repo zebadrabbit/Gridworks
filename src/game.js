@@ -7,6 +7,7 @@ const KIND_COLOR = { item: '#58d68d', fluid: '#5dade2', power: '#f4d03f', resour
 const TYPE_COLOR = {
   miner: '#f5a623', machine: '#4dd8ff', store: '#a29bfe',
   generator: '#f4d03f', hub: '#ff6b81', deposit: '#8d6e63', logistic: '#58d68d',
+  elevator: '#c084fc',
 };
 const DEP_STYLE = {
   mineral: { fill: '#241c14', edge: '#8d6e63' },
@@ -23,7 +24,8 @@ document.body.appendChild(tip);
 let ctx, state;
 const cam = { x: 0, y: 0, z: 1 };
 const ui = { mode: 'idle', placeKey: null, wireFrom: null, sel: null, hover: null,
-  mouse: { x: 0, y: 0 }, drag: null, hint: '', wireStyle: 'noodle' };
+  mouse: { x: 0, y: 0 }, drag: null, hint: '', wireStyle: 'noodle',
+  paused: false, speed: 1 };
 
 // ------------------------------------------------------------------ geometry
 
@@ -473,6 +475,7 @@ function buildPalette() {
     ['Production', Object.values(ctx.catalog).filter((d) => d.type === 'machine')],
     ['Power', Object.values(ctx.catalog).filter((d) => d.type === 'generator')],
     ['Logistics', Object.values(ctx.catalog).filter((d) => d.type === 'store' || d.type === 'logistic')],
+    ['Special', Object.values(ctx.catalog).filter((d) => d.type === 'elevator')],
   ];
   const pal = document.getElementById('palette');
   pal.innerHTML = '';
@@ -589,14 +592,20 @@ function updateMilestonePanel() {
   const box = document.getElementById('milestone');
   const idx = state.unlocked?.milestone ?? 0;
   const ms = S.MILESTONES[idx];
-  if (!ms) { box.innerHTML = `<h3>Milestones</h3><div class="dim">All milestones complete</div>`; return; }
-  const rows = Object.entries(ms.cost).map(([res, amt]) => {
-    const have = fmt(state.msProgress[res] ?? 0);
+  const bars = (cost, progress) => Object.entries(cost).map(([res, amt]) => {
+    const have = fmt(progress[res] ?? 0);
     const pct = Math.min(100, (Math.min(amt, have) / amt) * 100);
     return `<div class="ms-row"><span>${ctx.names[res] ?? res}</span><span>${Math.min(amt, have)}/${amt}</span></div>
       <div class="ms-bar"><i style="width:${pct}%"></i></div>`;
   }).join('');
-  box.innerHTML = `<h3>${ms.name}</h3>${rows}`;
+  if (ms) { box.innerHTML = `<h3>${ms.name}</h3>${bars(ms.cost, state.msProgress)}`; return; }
+  const ph = S.ELEVATOR_PHASES[state.elevator?.phase ?? 0];
+  if (!ph) { box.innerHTML = `<h3>Project Assembly</h3><div class="dim">🚀 Complete — you win!</div>`; return; }
+  if (!state.nodes.some((n) => n.key === 'space-elevator')) {
+    box.innerHTML = `<h3>Project Assembly</h3><div class="dim">Build the Space Elevator</div>`;
+    return;
+  }
+  box.innerHTML = `<h3>Phase ${(state.elevator.phase ?? 0) + 1}: ${ph.name}</h3>${bars(ph.cost, state.elevator.progress)}`;
 }
 
 function updateHud() {
@@ -604,6 +613,7 @@ function updateHud() {
   document.getElementById('hud-power').textContent = `⚡ ${fmt(p.demand)} / ${fmt(p.supply)} MW`;
   const total = Object.values(state.shipped).reduce((s, v) => s + v, 0);
   document.getElementById('hud-shipped').textContent = `📦 ${Math.floor(total)} shipped`;
+  document.getElementById('hud-seed').textContent = `🌱 ${state.seed}`;
   document.getElementById('hud-hint').textContent = ui.hint ||
     (ui.mode === 'wire' ? 'drag to a matching port' : 'drag ports to wire · right-drag to pan · wheel to zoom');
 }
@@ -611,6 +621,7 @@ function updateHud() {
 // --------------------------------------------------------------- persistence
 
 function save() {
+  state.savedAt = Date.now();
   localStorage.setItem(SAVE_KEY, JSON.stringify(state, (k, v) => (k === '_net' ? undefined : v)));
 }
 function load() {
@@ -623,10 +634,32 @@ function load() {
 
 // --------------------------------------------------------------------- main
 
+const fmtDur = (s) => {
+  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+};
+
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.classList.add('fade'), 7000);
+  setTimeout(() => el.remove(), 8000);
+}
+
 async function main() {
   const data = await (await fetch('data/source/satisfactory_data.json')).json();
   ctx = S.buildCtx(data);
   state = load() ?? S.newGame((Math.random() * 1e9) | 0, ctx);
+  const away = state.savedAt ? (Date.now() - state.savedAt) / 1000 : 0;
+  if (away > 60) {
+    const before = Object.values(state.shipped).reduce((s, v) => s + v, 0);
+    const simulated = S.simulateOffline(state, away, ctx);
+    const gained = Object.values(state.shipped).reduce((s, v) => s + v, 0) - before;
+    toast(`Welcome back — simulated ${fmtDur(simulated)} of offline progress` +
+      (gained >= 1 ? ` · shipped ${Math.floor(gained)} items` : ''));
+  }
   buildPalette();
 
   const hub = state.nodes.find((n) => n.key === 'the-hub');
@@ -636,23 +669,81 @@ async function main() {
     cam.y = innerHeight / 2 - (hub.y + 2) * T * cam.z;
   }
 
+  const hashSeed = (str) => {
+    let h = 2166136261;
+    for (const c of str) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  };
+  const startFresh = (seed) => {
+    state = S.newGame(seed, ctx);
+    lastPhase = state.elevator?.phase ?? 0;
+    select(null); save(); buildPalette(); updateMilestonePanel();
+  };
   document.getElementById('btn-reset').onclick = () => {
     if (!confirm('Abandon this factory and generate a new map?')) return;
-    state = S.newGame((Math.random() * 1e9) | 0, ctx);
-    select(null); save();
+    const input = prompt('Map seed (blank = random):', '');
+    if (input === null) return;
+    const t = input.trim();
+    startFresh(t === '' ? (Math.random() * 1e9) | 0 : /^\d+$/.test(t) ? parseInt(t, 10) >>> 0 : hashSeed(t));
   };
+
+  document.getElementById('btn-export').onclick = () => {
+    save();
+    const blob = new Blob([localStorage.getItem(SAVE_KEY)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `gridworks-save-${state.seed}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const fileInput = document.getElementById('file-import');
+  document.getElementById('btn-import').onclick = () => fileInput.click();
+  fileInput.onchange = async () => {
+    const f = fileInput.files[0];
+    fileInput.value = '';
+    if (!f) return;
+    try {
+      const s = S.normalizeSave(JSON.parse(await f.text()), ctx);
+      if (!s) throw new Error('not a Gridworks save');
+      state = s;
+      lastPhase = state.elevator?.phase ?? 0;
+      select(null); save(); buildPalette(); updateMilestonePanel();
+      toast('Save imported');
+    } catch (err) { alert('Import failed: ' + err.message); }
+  };
+
+  const pauseBtn = document.getElementById('btn-pause');
+  const speedBtn = document.getElementById('btn-speed');
+  const togglePause = () => { ui.paused = !ui.paused; pauseBtn.textContent = ui.paused ? '▶' : '⏸'; };
+  pauseBtn.onclick = togglePause;
+  speedBtn.onclick = () => {
+    ui.speed = ui.speed >= 4 ? 1 : ui.speed * 2;
+    speedBtn.textContent = ui.speed + 'x';
+  };
+  addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+    if (e.key === ' ') { e.preventDefault(); togglePause(); }
+  });
+
   setInterval(save, 5000);
   addEventListener('beforeunload', save);
   setInterval(updateBuffers, 400);
   setInterval(updateMilestonePanel, 400);
   updateMilestonePanel();
 
-  let last = performance.now(), acc = 0, lastMs = -1;
+  let last = performance.now(), acc = 0, lastMs = -1, lastPhase = state.elevator?.phase ?? 0;
   const STEP = 0.1;
   function frame(now) {
-    acc += Math.min(0.5, (now - last) / 1000); last = now;
+    acc += Math.min(0.5, (now - last) / 1000) * (ui.paused ? 0 : ui.speed); last = now;
     while (acc >= STEP) { S.tick(state, STEP, ctx); acc -= STEP; }
     if ((state.unlocked?.milestone ?? 0) !== lastMs) { lastMs = state.unlocked?.milestone ?? 0; buildPalette(); }
+    const phase = state.elevator?.phase ?? 0;
+    if (phase !== lastPhase) {
+      lastPhase = phase;
+      toast(phase >= S.ELEVATOR_PHASES.length
+        ? '🚀 Project Assembly complete — you win!'
+        : `Space Elevator phase ${phase} complete`);
+    }
     draw(now);
     updateHud();
     requestAnimationFrame(frame);

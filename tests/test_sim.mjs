@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -343,6 +343,101 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.equal(normalizeSave(null, ctx), null, 'null save rejected');
   assert.equal(normalizeSave({}, ctx), null, 'shapeless save rejected');
   assert.equal(normalizeSave({ nodes: [], wires: [] }, ctx), null, 'hubless save rejected');
+}
+
+// offline progress: coarse offline sim matches fine online sim; away time is capped
+{
+  const build = (seed) => {
+    const s = newGame(seed, ctx);
+    s.unlocked.buildings = Object.keys(ctx.catalog);
+    s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+    const d = addDeposit(s, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+    const m = addNode(s, 'miner-mk1', 10, 5, ctx);
+    const box = addNode(s, 'storage-container', 16, 5, ctx);
+    const b = addNode(s, 'biomass-burner', 10, 12, ctx);
+    b.buf.wood = 200; // 0.3 wood/s -> lasts the whole run
+    addWire(s, d, 'out0', m, 'res0', ctx);
+    addWire(s, b, 'pout', m, 'pin', ctx);
+    addWire(s, m, 'out0', box, 'in0', ctx);
+    return { s, box };
+  };
+  const online = build(35);
+  for (let i = 0; i < 6000; i++) tick(online.s, 0.1, ctx); // 600s live at 10 Hz
+  const offline = build(35);
+  assert.equal(simulateOffline(offline.s, 600, ctx), 600, 'full away time simulated');
+  const a = online.box.buf['iron-ore'] ?? 0;
+  const b = offline.box.buf['iron-ore'] ?? 0;
+  assert.ok(a > 500, `online chain produced, got ${a}`);
+  assert.ok(Math.abs(a - b) < a * 0.05, `offline matches online within 5% (${a} vs ${b})`);
+  const capped = build(37);
+  assert.equal(simulateOffline(capped.s, OFFLINE_CAP + 9999, ctx), OFFLINE_CAP, 'away time capped');
+  // savedAt is metadata game.js writes; normalizeSave must pass it through
+  const withStamp = build(39).s;
+  withStamp.savedAt = 1234567890;
+  const norm = normalizeSave(JSON.parse(JSON.stringify(withStamp)), ctx);
+  assert.equal(norm.savedAt, 1234567890, 'savedAt survives normalizeSave');
+}
+
+// map seeds are deterministic and shareable
+{
+  const layout = (s) => s.nodes.map((n) => [n.key, n.x, n.y, n.res ?? '', n.purity ?? '']);
+  assert.deepEqual(layout(newGame(4242, ctx)), layout(newGame(4242, ctx)), 'same seed, same map');
+  assert.notDeepEqual(layout(newGame(4242, ctx)), layout(newGame(4243, ctx)), 'different seed, different map');
+}
+
+// space elevator: unlocked by the last milestone, ships phases, rejects non-parts
+{
+  const s = newGame(41, ctx);
+  assert.ok(!isUnlocked(s, 'space-elevator'), 'elevator locked at start');
+  assert.ok(MILESTONES[MILESTONES.length - 1].rewards.buildings.includes('space-elevator'),
+    'final milestone unlocks the elevator');
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  s.unlocked.milestone = MILESTONES.length; // ladder finished
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const elev = addNode(s, 'space-elevator', 10, 5, ctx);
+  assert.ok(elev, 'elevator placeable when unlocked');
+  const box = addNode(s, 'storage-container', 20, 5, ctx);
+  const junk = addNode(s, 'storage-container', 20, 10, ctx);
+  junk.buf['iron-plate'] = 500;
+  assert.ok(addWire(s, box, 'out0', elev, 'in0', ctx), 'container feeds elevator');
+  assert.ok(addWire(s, junk, 'out0', elev, 'in0', ctx), 'second belt allowed');
+  // phase 1 needs smart-plating; junk iron plates must not move (accepts filter)
+  box.buf['smart-plating'] = ELEVATOR_PHASES[0].cost['smart-plating'] + 5;
+  for (let i = 0; i < 1200 && s.elevator.phase === 0; i++) tick(s, 0.1, ctx);
+  assert.equal(s.elevator.phase, 1, 'phase 1 completes from shipped smart-plating');
+  assert.equal(junk.buf['iron-plate'], 500, 'non-project items never leave the container');
+  // run the remaining phases by stocking each cost
+  for (let phase = 1; phase < ELEVATOR_PHASES.length; phase++) {
+    for (const [res, amt] of Object.entries(ELEVATOR_PHASES[phase].cost)) box.buf[res] = amt + 5;
+    for (let i = 0; i < 20000 && s.elevator.phase === phase; i++) tick(s, 0.1, ctx);
+    assert.equal(s.elevator.phase, phase + 1, `phase ${phase + 1} completes`);
+  }
+  tick(s, 0.1, ctx);
+  assert.equal(elev.status, 'Project Assembly complete', 'victory status after final phase');
+  // every project part is producible with the buildings the full ladder unlocks
+  const unlockedAll = [...START_UNLOCKED, ...MILESTONES.flatMap((m) => m.rewards.buildings ?? [])];
+  const cats = new Set(unlockedAll.map((k) => ctx.catalog[k].cat).filter(Boolean));
+  const minerCats = new Set(unlockedAll.filter((k) => ctx.catalog[k].type === 'miner')
+    .map((k) => ctx.catalog[k].minerCat));
+  const producible = (item, visiting = new Set()) => {
+    if (visiting.has(item)) return false;
+    const res = ctx.resources.find((r) => r.key_name === item);
+    if (res) return minerCats.has(res.category);
+    if (item === 'leaves' || item === 'wood') return true;
+    visiting.add(item);
+    const ok = data.recipes.some((r) => cats.has(r.category) &&
+      r.products.some(([p]) => p === item) &&
+      r.ingredients.every(([i]) => producible(i, visiting)));
+    visiting.delete(item);
+    return ok;
+  };
+  for (const item of ELEVATOR_ITEMS) assert.ok(producible(item), `${item} producible post-ladder`);
+  // elevator state survives normalization; old saves get a default
+  const norm = normalizeSave(JSON.parse(JSON.stringify(s)), ctx);
+  assert.equal(norm.elevator.phase, ELEVATOR_PHASES.length, 'elevator phase survives save');
+  const old = JSON.parse(JSON.stringify(s));
+  delete old.elevator;
+  assert.deepEqual(normalizeSave(old, ctx).elevator, { phase: 0, progress: {} }, 'old saves default elevator');
 }
 
 console.log('all sim checks passed');
