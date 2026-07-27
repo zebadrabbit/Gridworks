@@ -27,6 +27,8 @@ Some gameplay stats have no equivalent in the source JSON and are hardcoded in
 - `MILESTONES` — a hand-rolled 7-milestone ladder shaped after the wiki's early tiers;
   costs are idle-scaled guesses and free to tune. Every item/building key is validated
   against the JSON at load (`validateMilestones`) and bad keys throw.
+- `ELEVATOR_PHASES` — the Space Elevator's 4 Project Assembly phases, shaped after the
+  wiki; counts are idle-scaled guesses, validated at load like milestones.
 - `DRAW_OVERRIDE` — power draw for buildings whose JSON lists `power: 0` but which
   draw variable power in-game.
 

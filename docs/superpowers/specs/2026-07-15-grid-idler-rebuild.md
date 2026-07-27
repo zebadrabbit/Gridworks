@@ -45,3 +45,6 @@ Run: `python3 -m http.server` from repo root, open http://localhost:8000.
 
 Offline progress, belt/pipe mk upgrades, milestones/unlocks, overclocking, somersloops,
 sound, minimap.
+
+*(Since shipped: belt/pipe marks and milestones/unlocks in iteration 2 (2026-07-18);
+offline progress on 2026-07-27 — see the specs of those dates.)*

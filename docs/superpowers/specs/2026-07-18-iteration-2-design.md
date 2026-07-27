@@ -85,3 +85,6 @@ burner powers a machine, milestone completes and unlocks, splitter splits 60 →
 Vehicles/trains/drones, space elevator (candidate end-goal), enemies → alien-protein
 node (the JSON already has `alien-protein` + `biomass-from-alien-protein` when we want
 it), overclocking, offline progress, somersloops, nuclear waste, sound, minimap.
+
+*(Since shipped on 2026-07-27: space elevator end-goal and offline progress — see the
+specs of that date. The rest remains open backlog.)*
