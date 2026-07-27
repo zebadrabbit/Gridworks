@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# manage.sh — start/stop the static dev server (python3 -m http.server)
+# manage.sh — start/stop the static dev server (python -m http.server)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -7,12 +7,20 @@ PORT="${PORT:-8889}"  # 8000 = honcho, 8888 also taken on this box
 PID_FILE=.server.pid
 LOG_FILE=.server.log
 
+# python3 on most boxes; plain python or the py launcher on Windows. Probe with
+# --version because the Windows Store ships a fake python.exe that only opens the Store.
+PY=
+for c in python3 python py; do
+  if "$c" --version >/dev/null 2>&1; then PY=$c; break; fi
+done
+[[ -n $PY ]] || { echo "no python found (need python3/python/py for the dev server)"; exit 1; }
+
 running() { [[ -f $PID_FILE ]] && kill -0 "$(cat $PID_FILE)" 2>/dev/null; }
 
 case "${1:-}" in
   start)
     if running; then echo "already running (pid $(cat $PID_FILE)) on port $PORT"; exit 0; fi
-    nohup python3 -m http.server "$PORT" >"$LOG_FILE" 2>&1 &
+    nohup "$PY" -m http.server "$PORT" >"$LOG_FILE" 2>&1 &
     echo $! >"$PID_FILE"
     sleep 0.3
     if ! running; then
