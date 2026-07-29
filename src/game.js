@@ -378,6 +378,12 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 addEventListener('mouseup', () => {
+  // This listener is on window, not the canvas, because a drag may end anywhere — but only
+  // a canvas interaction can change what the inspector shows. Rebuilding it on every mouseup
+  // destroys the <select> a click just opened (box.innerHTML replaces the element), so the
+  // recipe and tier dropdowns closed the instant you pressed them. Check before the body
+  // below clears ui.drag / ui.wireFrom.
+  const fromCanvas = !!ui.drag || (ui.mode === 'wire' && !!ui.wireFrom);
   if (ui.drag?.node) {
     const n = ui.drag.node;
     const [nx, ny] = [n.x, n.y];
@@ -402,7 +408,7 @@ addEventListener('mouseup', () => {
     setMode('idle');
   }
   ui.drag = null;
-  refreshInspector();
+  if (fromCanvas) refreshInspector();
 });
 
 canvas.addEventListener('wheel', (e) => {
@@ -521,7 +527,7 @@ function refreshInspector() {
     if (!w) return select(null);
     const marks = w.kind === 'fluid' ? ctx.pipes : (w.kind === 'item' ? ctx.belts : null);
     const maxMark = w.kind === 'fluid' ? (state.pipeMark ?? ctx.pipes.length - 1) : (state.beltMark ?? ctx.belts.length - 1);
-    const markHtml = marks ? `<section><label class="dim">Tier</label><select id="mark">
+    const markHtml = marks ? `<section><label class="dim" for="mark">Tier</label><select id="mark">
       ${Array.from({ length: maxMark + 1 }, (_, i) =>
         `<option value="${i}" ${w.mark === i ? 'selected' : ''}>${marks[i].rate}/min</option>`).join('')}
     </select></section>` : '';
@@ -562,7 +568,7 @@ function refreshInspector() {
 
   if (def.type === 'machine') {
     const recipes = ctx.recipesByCat[def.cat] ?? [];
-    html += `<section><label class="dim">Recipe</label><select id="recipe">
+    html += `<section><label class="dim" for="recipe">Recipe</label><select id="recipe">
       <option value="">— none —</option>
       ${recipes.map((r) => `<option value="${r.key_name}" ${n.recipe === r.key_name ? 'selected' : ''}>${r.name}</option>`).join('')}
     </select><div class="dim" id="recipe-io"></div></section>`;
