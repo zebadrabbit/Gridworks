@@ -510,4 +510,72 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.equal(lightOf(m, ctx.catalog['miner-mk1']), 'yellow', 'but the light can');
 }
 
+// lifetime counters: production is conserved, and state-time accumulates the same
+// whether the run happened live or through the coarse offline simulator
+{
+  const build = (seed) => {
+    const s = newGame(seed, ctx);
+    s.unlocked.buildings = Object.keys(ctx.catalog);
+    s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+    const hubN = s.nodes[0];
+    const d = addDeposit(s, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+    const m = addNode(s, 'miner-mk1', 10, 5, ctx);
+    const sm = addNode(s, 'smelter', 14, 5, ctx);
+    const b = addNode(s, 'biomass-burner', 10, 12, ctx);
+    b.buf.wood = 200; // 0.3 wood/s -> lasts the whole run
+    setRecipe(s, sm, 'iron-ingot', ctx);
+    addWire(s, d, 'out0', m, 'res0', ctx);
+    addWire(s, b, 'pout', m, 'pin', ctx);
+    addWire(s, b, 'pout', sm, 'pin', ctx);
+    addWire(s, m, 'out0', sm, 'in0', ctx);
+    addWire(s, sm, 'out0', hubN, 'in0', ctx);
+    return { s, m, sm };
+  };
+
+  const live = build(49);
+  for (let i = 0; i < 3000; i++) tick(live.s, 0.1, ctx); // 300s
+
+  // every ingot the smelter made is either shipped to the HUB or still in its buffer
+  const shipped = live.s.shipped['iron-ingot'] ?? 0;
+  const held = live.sm.buf['iron-ingot'] ?? 0;
+  assert.ok(live.sm.made > 100, `smelter produced, got ${live.sm.made}`);
+  assert.ok(Math.abs(live.sm.made - (shipped + held)) < 1e-6,
+    `made ${live.sm.made} == shipped ${shipped} + held ${held}`);
+  assert.ok(live.m.made > 100, `miner produced, got ${live.m.made}`);
+  assert.equal(live.s.nodes.find((n) => n.key === 'biomass-burner').made, undefined,
+    'generators produce no items and get no made counter');
+
+  // 300s of green uptime, whether live or offline
+  const total = (n) => (n.tGreen ?? 0) + (n.tYellow ?? 0) + (n.tRed ?? 0);
+  assert.ok(Math.abs(total(live.m) - 300) < 1e-6, `all live time accounted, got ${total(live.m)}`);
+
+  const away = build(49);
+  assert.equal(simulateOffline(away.s, 300, ctx), 300);
+  assert.ok(Math.abs(total(away.m) - 300) < 1e-6, `all offline time accounted, got ${total(away.m)}`);
+  assert.ok(Math.abs((live.m.tGreen ?? 0) - (away.m.tGreen ?? 0)) < 0.6,
+    `uptime matches within one offline step (${live.m.tGreen} vs ${away.m.tGreen})`);
+  assert.ok(live.m.tGreen > 290, `miner ran green nearly the whole time, got ${live.m.tGreen}`);
+
+  // counters are plain numbers: they survive a save round-trip untouched
+  const rt = normalizeSave(JSON.parse(JSON.stringify(live.s)), ctx);
+  const rtM = rt.nodes.find((n) => n.id === live.m.id);
+  assert.equal(rtM.made, live.m.made, 'made survives save/normalize');
+  assert.equal(rtM.tGreen, live.m.tGreen, 'tGreen survives save/normalize');
+}
+
+// a red node accumulates tRed, not tGreen
+{
+  const s = newGame(51, ctx);
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const d = addDeposit(s, 'copper-ore', 'mineral', 'normal', 1, 30, 30);
+  const dark = addNode(s, 'miner-mk1', 35, 30, ctx); // wired to ore, never powered
+  addWire(s, d, 'out0', dark, 'res0', ctx);
+  for (let i = 0; i < 100; i++) tick(s, 0.1, ctx); // 10s
+  assert.equal(dark.status, 'no power');
+  assert.ok(Math.abs(dark.tRed - 10) < 1e-6, `unpowered miner banks red time, got ${dark.tRed}`);
+  assert.equal(dark.tGreen, undefined, 'never green, never allocated');
+  assert.equal(dark.made, undefined, 'never produced');
+}
+
 console.log('all sim checks passed');

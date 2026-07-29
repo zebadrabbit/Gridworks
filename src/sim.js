@@ -461,7 +461,9 @@ export function tick(state, dt, ctx) {
       const res = node.depositRes;
       const have = node.buf[res] ?? 0;
       if (have >= BUF_CAP) { node.status = 'output full'; continue; }
-      node.buf[res] = Math.min(BUF_CAP, have + (def.rate * node.depositMult / 60) * dt * r);
+      const mined = Math.min(BUF_CAP, have + (def.rate * node.depositMult / 60) * dt * r) - have;
+      node.buf[res] = have + mined;
+      node.made = (node.made ?? 0) + mined;
       node.status = 'mining';
     } else if (def.type === 'machine') {
       if (!node.recipe) { node.status = 'no recipe'; continue; }
@@ -477,7 +479,10 @@ export function tick(state, dt, ctx) {
       node.status = 'crafting';
       if (node.progress >= 1) {
         if (recipe.products.every(([res]) => (node.buf[res] ?? 0) < BUF_CAP)) {
-          for (const [res, amt] of recipe.products) node.buf[res] = (node.buf[res] ?? 0) + amt;
+          for (const [res, amt] of recipe.products) {
+            node.buf[res] = (node.buf[res] ?? 0) + amt;
+            node.made = (node.made ?? 0) + amt;
+          }
           node.progress = 0;
         } else { node.progress = 1; node.status = 'output full'; }
       }
@@ -522,6 +527,15 @@ export function tick(state, dt, ctx) {
     } else if (def.type === 'logistic') {
       node.status = 'ok';
     }
+  }
+
+  // second pass: the main loop continues out of most branches, so state-time is banked
+  // here, after every node's status for this tick is final
+  for (const node of state.nodes) {
+    const light = lightOf(node, ctx.catalog[node.key]);
+    if (light === 'green') node.tGreen = (node.tGreen ?? 0) + dt;
+    else if (light === 'yellow') node.tYellow = (node.tYellow ?? 0) + dt;
+    else if (light === 'red') node.tRed = (node.tRed ?? 0) + dt;
   }
 
   const byId = Object.fromEntries(state.nodes.map((n) => [n.id, n]));
