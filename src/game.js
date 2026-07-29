@@ -543,9 +543,14 @@ function refreshInspector() {
     return;
   }
 
-  const statusCls = ['no power', 'no fuel', 'no recipe'].includes(n.status) ? 'bad'
-    : ['waiting for input', 'output full', 'full', 'idle'].includes(n.status) ? 'warn' : 'good';
+  const statusCls = { red: 'bad', yellow: 'warn', green: 'good' }[S.lightOf(n, def)] ?? '';
   let html = `<h2>${def.name}</h2><div class="status ${statusCls}">${n.status}</div>`;
+  if (['miner', 'machine', 'generator'].includes(def.type)) {
+    const lived = (n.tGreen ?? 0) + (n.tYellow ?? 0) + (n.tRed ?? 0);
+    const uptime = lived > 0 ? `${Math.round(((n.tGreen ?? 0) / lived) * 100)}% uptime` : '—';
+    const made = n.made != null ? ` · ${Math.floor(n.made).toLocaleString()} produced` : '';
+    html += `<div class="dim">${uptime}${made}</div>`;
+  }
   if (n.depositRes) html += `<div class="dim">on ${ctx.names[n.depositRes]} (x${n.depositMult})</div>`;
   else if (def.type === 'miner') html += `<div class="dim">wire a deposit to res port</div>`;
   if (def.draw) html += `<div class="dim">draws ${def.draw} MW</div>`;
