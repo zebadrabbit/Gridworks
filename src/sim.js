@@ -381,6 +381,28 @@ export function simulateOffline(state, seconds, ctx) {
   return steps * OFFLINE_STEP;
 }
 
+// ---------------------------------------------------------------- status light
+
+// The status strings tick() already writes, mapped to a light color. Deposits, the HUB,
+// the elevator and logistics get no light: their status is milestone/phase text or the
+// unconditional 'ok', so a light there would be permanent noise.
+const LIT_TYPES = new Set(['miner', 'machine', 'generator', 'store']);
+const LIGHT_BY_STATUS = {
+  'no power': 'red', 'no fuel': 'red', 'no recipe': 'red', 'no deposit': 'red',
+  'waiting for input': 'yellow', 'output full': 'yellow', full: 'yellow',
+  mining: 'green', crafting: 'green', generating: 'green', storing: 'green',
+};
+// A partially-supplied machine still reports 'crafting'; below this ratio it is visibly
+// slowed and must not read as healthy.
+export const THROTTLE_LIGHT = 0.95;
+
+export function lightOf(node, def) {
+  if (!LIT_TYPES.has(def.type)) return null;
+  const light = LIGHT_BY_STATUS[node.status] ?? null;
+  if (light !== 'green') return light;
+  return (node.ratio ?? 1) < THROTTLE_LIGHT ? 'yellow' : 'green';
+}
+
 // ----------------------------------------------------------------------- tick
 
 const BUF_CAP = 100; // per-resource cap for miner/machine/generator buffers
@@ -432,6 +454,7 @@ export function tick(state, dt, ctx) {
   for (const node of state.nodes) {
     const def = ctx.catalog[node.key];
     const r = ratioOf(node);
+    node.ratio = r;
     if (def.type === 'miner') {
       if (!node.depositRes) { node.status = 'no deposit'; continue; }
       if (r <= 0) { node.status = 'no power'; continue; }

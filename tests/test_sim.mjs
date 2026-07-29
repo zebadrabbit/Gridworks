@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -438,6 +438,76 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   const old = JSON.parse(JSON.stringify(s));
   delete old.elevator;
   assert.deepEqual(normalizeSave(old, ctx).elevator, { phase: 0, progress: {} }, 'old saves default elevator');
+}
+
+// status lights: one pure mapping from status (+ power ratio) to a light color
+{
+  const mach = ctx.catalog.smelter;
+  const mine = ctx.catalog['miner-mk1'];
+  const gen = ctx.catalog['biomass-burner'];
+  const box = ctx.catalog['storage-container'];
+
+  assert.equal(lightOf({ status: 'no power' }, mach), 'red');
+  assert.equal(lightOf({ status: 'no recipe' }, mach), 'red');
+  assert.equal(lightOf({ status: 'no fuel' }, gen), 'red');
+  assert.equal(lightOf({ status: 'no deposit' }, mine), 'red');
+
+  assert.equal(lightOf({ status: 'waiting for input' }, mach), 'yellow');
+  assert.equal(lightOf({ status: 'output full' }, mine), 'yellow');
+  assert.equal(lightOf({ status: 'full' }, box), 'yellow');
+
+  assert.equal(lightOf({ status: 'crafting' }, mach), 'green', 'missing ratio counts as full power');
+  assert.equal(lightOf({ status: 'mining', ratio: 1 }, mine), 'green');
+  assert.equal(lightOf({ status: 'generating' }, gen), 'green');
+  assert.equal(lightOf({ status: 'storing' }, box), 'green');
+
+  // brownout: the status string still says "crafting", the light must not say green
+  assert.equal(lightOf({ status: 'crafting', ratio: 0.5 }, mach), 'yellow');
+  assert.equal(lightOf({ status: 'crafting', ratio: THROTTLE_LIGHT }, mach), 'green', 'boundary is inclusive-green');
+  assert.equal(lightOf({ status: 'crafting', ratio: THROTTLE_LIGHT - 0.01 }, mach), 'yellow');
+
+  // unlit node types keep their per-type color
+  assert.equal(lightOf({ status: 'ok' }, ctx.catalog.splitter), null, 'logistics get no light');
+  assert.equal(lightOf({ status: 'ok' }, ctx.catalog['pipe-merger']), null);
+  assert.equal(lightOf({ status: 'milestone: Part Assembly' }, ctx.catalog['the-hub']), null);
+  assert.equal(lightOf({ status: 'phase 1: Platform' }, ctx.catalog['space-elevator']), null);
+  assert.equal(lightOf({ status: 'growing' }, ctx.catalog.deposit), null);
+  assert.equal(lightOf({ status: 'idle' }, mach), null, 'pre-first-tick status has no light');
+}
+
+// tick stores the power ratio on every node so the renderer never recomputes networks
+{
+  const s = newGame(45, ctx);
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const d = addDeposit(s, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const m = addNode(s, 'miner-mk1', 10, 5, ctx);
+  const b = addNode(s, 'biomass-burner', 10, 12, ctx);
+  b.buf.wood = 50;
+  addWire(s, d, 'out0', m, 'res0', ctx);
+  addWire(s, b, 'pout', m, 'pin', ctx);
+  tick(s, 0.1, ctx);
+  assert.equal(m.ratio, 1, 'fully supplied miner runs at ratio 1');
+  assert.equal(b.ratio, 1, 'a node that draws no power reports ratio 1');
+}
+
+// brownout: an oversubscribed network throttles, still reports "mining", lights yellow
+{
+  const s = newGame(47, ctx);
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const d = addDeposit(s, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const m = addNode(s, 'miner-mk1', 10, 5, ctx);
+  const hog = addNode(s, 'accelerator', 10, 10, ctx); // 500 MW idle draw
+  const b = addNode(s, 'biomass-burner', 16, 10, ctx); // 30 MW
+  b.buf.wood = 50;
+  addWire(s, d, 'out0', m, 'res0', ctx);
+  addWire(s, b, 'pout', m, 'pin', ctx);
+  addWire(s, b, 'pout', hog, 'pin', ctx);
+  tick(s, 0.1, ctx);
+  assert.ok(m.ratio > 0 && m.ratio < 1, `browned-out miner has a partial ratio, got ${m.ratio}`);
+  assert.equal(m.status, 'mining', 'the status string cannot express a brownout');
+  assert.equal(lightOf(m, ctx.catalog['miner-mk1']), 'yellow', 'but the light can');
 }
 
 console.log('all sim checks passed');
