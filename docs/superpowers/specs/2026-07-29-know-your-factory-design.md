@@ -35,7 +35,7 @@ node test suite covers it. `game.js` has no tests.
 | Light | Statuses |
 |---|---|
 | red | `no power`, `no fuel`, `no recipe`, `no deposit` |
-| yellow | `waiting for input`, `output full`, `full`, or `0 < ratio < 0.95` |
+| yellow | `waiting for input`, `output full`, `full`, or `ratio < 0.95` |
 | green | `mining`, `crafting`, `generating`, `storing` |
 | white | reserved for overclocking — nothing emits it |
 
@@ -68,7 +68,9 @@ Clicking an entry pans the camera to that node, reusing the centering math from 
 
 Throttled networks are derived at render time by grouping nodes on `node._net` and
 reading `node.ratio`. No new state: `_net` is stripped from saves but is always present
-in memory after the first tick.
+in memory after the first tick. Only nodes with `ratio > 0` count as throttled — a
+dead network's machines are already listed individually as red `no power`, and
+counting them twice is the noise this list exists to remove.
 
 ## Lifetime counters
 
