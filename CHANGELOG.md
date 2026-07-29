@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-07-29 — Know Your Factory
+
+- **Status lights**: a new pure `lightOf()` in sim.js maps each node's existing status
+  string plus its power ratio to red/yellow/green; `game.js` renders it as the node's
+  border glow and status-text color. Deposits, the HUB, the elevator and logistics get
+  no light (their status is milestone text or an unconditional `ok`). White is reserved
+  for overclocking, which does not exist yet.
+- **Brownouts are visible**: `tick()` now stores `node.ratio`, so a machine on an
+  oversubscribed network lights yellow instead of reading as healthy green while
+  silently running at a fraction of speed.
+- **Alerts**: a `⚠ N` chip in the HUD counts red machines plus throttled networks;
+  clicking opens a list, and clicking an entry pans the camera to the culprit and
+  selects it. Throttled networks are one entry each, not one per machine.
+- **Machine analytics**: miners, machines and generators bank lifetime `made` and
+  green/yellow/red state-time; the inspector shows `84% uptime · 1,204 produced`.
+  Plain numbers, so saves and offline simulation carry them with no special casing.
+- Tests: `lightOf()` across every status and the throttle boundary, ratio storage,
+  brownout detection, production conservation through a miner → smelter → HUB chain,
+  and uptime accumulating identically live and offline.
+
 ## 2026-07-27 — Offline Progress, Space Elevator & QoL
 
 - **Offline progress**: saves stamp `savedAt`; on load, away time (capped at 8h) is

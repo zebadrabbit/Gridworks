@@ -616,6 +616,52 @@ function updateMilestonePanel() {
   box.innerHTML = `<h3>Phase ${(state.elevator.phase ?? 0) + 1}: ${ph.name}</h3>${bars(ph.cost, state.elevator.progress)}`;
 }
 
+// Red machines are listed one per node. A brownout is a property of a power network, so
+// it is listed once per network — twelve entries for one cause is the noise this removes.
+function alertList() {
+  const out = [];
+  const nets = {};
+  for (const n of state.nodes) {
+    const def = ctx.catalog[n.key];
+    if (S.lightOf(n, def) === 'red') out.push({ id: n.id, text: `${def.name} — ${n.status}` });
+    // ratio 0 means the network is dead, and those machines are already listed as red
+    if (n._net != null && n.ratio > 0 && n.ratio < S.THROTTLE_LIGHT) (nets[n._net] ??= []).push(n);
+  }
+  for (const group of Object.values(nets)) {
+    out.push({ id: group[0].id, warn: true,
+      text: `${group.length} machines throttled — grid at ${Math.round(group[0].ratio * 100)}%` });
+  }
+  return out;
+}
+
+function panTo(id) {
+  const n = state.nodes.find((q) => q.id === id);
+  if (!n) return;
+  const half = ctx.catalog[n.key].size / 2;
+  cam.x = innerWidth / 2 - (n.x + half) * T * cam.z;
+  cam.y = innerHeight / 2 - (n.y + half) * T * cam.z;
+  select({ type: 'node', id });
+}
+
+function refreshAlerts() {
+  const chip = document.getElementById('hud-alerts');
+  const box = document.getElementById('alerts');
+  const list = alertList();
+  chip.textContent = `⚠ ${list.length}`;
+  chip.style.display = list.length ? '' : 'none';
+  if (!list.length) box.classList.remove('open');
+  if (!box.classList.contains('open')) return;
+  box.style.left = chip.getBoundingClientRect().left + 'px';
+  box.innerHTML = '';
+  for (const a of list) {
+    const el = document.createElement('div');
+    el.className = a.warn ? 'alert warn' : 'alert';
+    el.textContent = a.text;
+    el.onclick = () => panTo(a.id);
+    box.appendChild(el);
+  }
+}
+
 function updateHud() {
   const p = state.power ?? { supply: 0, demand: 0 };
   document.getElementById('hud-power').textContent = `⚡ ${fmt(p.demand)} / ${fmt(p.supply)} MW`;
@@ -733,10 +779,16 @@ async function main() {
     if (e.key === ' ') { e.preventDefault(); togglePause(); }
   });
 
+  document.getElementById('hud-alerts').onclick = () => {
+    document.getElementById('alerts').classList.toggle('open');
+    refreshAlerts();
+  };
+
   setInterval(save, 5000);
   addEventListener('beforeunload', save);
   setInterval(updateBuffers, 400);
   setInterval(updateMilestonePanel, 400);
+  setInterval(refreshAlerts, 400);
   updateMilestonePanel();
 
   let last = performance.now(), acc = 0, lastMs = -1, lastPhase = state.elevator?.phase ?? 0;
