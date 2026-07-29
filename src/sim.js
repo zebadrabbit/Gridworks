@@ -531,6 +531,9 @@ export function tick(state, dt, ctx) {
 
   // second pass: the main loop continues out of most branches, so state-time is banked
   // here, after every node's status for this tick is final
+  // ponytail: 'store' banks tGreen/tYellow/tRed here too but nothing reads a container's
+  // numbers yet; upgrade path is surfacing its not-full % in the inspector, or dropping
+  // 'store' from LIT_TYPES if save size ever matters.
   for (const node of state.nodes) {
     const light = lightOf(node, ctx.catalog[node.key]);
     if (light === 'green') node.tGreen = (node.tGreen ?? 0) + dt;

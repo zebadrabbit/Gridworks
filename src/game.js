@@ -505,6 +505,13 @@ function buildPalette() {
 
 const fmt = (v) => (v >= 100 ? Math.round(v) : Math.round(v * 10) / 10);
 
+// text for the inspector's lifetime line; '—' until the node has ticked once
+function uptimeText(n) {
+  const lived = (n.tGreen ?? 0) + (n.tYellow ?? 0) + (n.tRed ?? 0);
+  const uptime = lived > 0 ? `${Math.round(((n.tGreen ?? 0) / lived) * 100)}% uptime` : '—';
+  return uptime + (n.made != null ? ` · ${Math.floor(n.made).toLocaleString()} produced` : '');
+}
+
 function refreshInspector() {
   const box = document.getElementById('inspector');
   if (!ui.sel) { box.innerHTML = '<div class="dim">Nothing selected</div>'; return; }
@@ -546,10 +553,7 @@ function refreshInspector() {
   const statusCls = { red: 'bad', yellow: 'warn', green: 'good' }[S.lightOf(n, def)] ?? '';
   let html = `<h2>${def.name}</h2><div class="status ${statusCls}">${n.status}</div>`;
   if (['miner', 'machine', 'generator'].includes(def.type)) {
-    const lived = (n.tGreen ?? 0) + (n.tYellow ?? 0) + (n.tRed ?? 0);
-    const uptime = lived > 0 ? `${Math.round(((n.tGreen ?? 0) / lived) * 100)}% uptime` : '—';
-    const made = n.made != null ? ` · ${Math.floor(n.made).toLocaleString()} produced` : '';
-    html += `<div class="dim">${uptime}${made}</div>`;
+    html += `<div class="dim" id="uptime">${uptimeText(n)}</div>`;
   }
   if (n.depositRes) html += `<div class="dim">on ${ctx.names[n.depositRes]} (x${n.depositMult})</div>`;
   else if (def.type === 'miner') html += `<div class="dim">wire a deposit to res port</div>`;
@@ -594,6 +598,8 @@ function updateBuffers() {
   if (bufs) bufs.innerHTML = render(n.buf);
   const shipped = document.getElementById('bufs2');
   if (shipped) shipped.innerHTML = render(state.shipped);
+  const uptime = document.getElementById('uptime');
+  if (uptime) uptime.textContent = uptimeText(n);
 }
 
 function updateMilestonePanel() {
@@ -636,12 +642,16 @@ function alertList() {
   return out;
 }
 
-function panTo(id) {
-  const n = state.nodes.find((q) => q.id === id);
-  if (!n) return;
+function centerOn(n) {
   const half = ctx.catalog[n.key].size / 2;
   cam.x = innerWidth / 2 - (n.x + half) * T * cam.z;
   cam.y = innerHeight / 2 - (n.y + half) * T * cam.z;
+}
+
+function panTo(id) {
+  const n = state.nodes.find((q) => q.id === id);
+  if (!n) return;
+  centerOn(n);
   select({ type: 'node', id });
 }
 
@@ -651,9 +661,16 @@ function refreshAlerts() {
   const list = alertList();
   chip.textContent = `⚠ ${list.length}`;
   chip.style.display = list.length ? '' : 'none';
-  if (!list.length) box.classList.remove('open');
+  if (!list.length) { box.classList.remove('open'); box.dataset.sig = ''; }
   if (!box.classList.contains('open')) return;
-  box.style.left = chip.getBoundingClientRect().left + 'px';
+  // clamp so the 300px panel never renders off the right edge of a narrow viewport
+  box.style.left = Math.min(chip.getBoundingClientRect().left, innerWidth - 308) + 'px';
+  // ponytail: skip the rebuild when the list text is unchanged, so a scrolled-open panel
+  // keeps its scrollTop across this 400ms tick instead of snapping back to the top.
+  // Ceiling: still a full rebuild on any real change, fine at this list length.
+  const sig = list.map((a) => a.text).join('|');
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
   box.innerHTML = '';
   for (const a of list) {
     const el = document.createElement('div');
@@ -720,10 +737,7 @@ async function main() {
 
   const hub = state.nodes.find((n) => n.key === 'the-hub');
   cam.z = 0.9;
-  if (hub) {
-    cam.x = innerWidth / 2 - (hub.x + 2) * T * cam.z;
-    cam.y = innerHeight / 2 - (hub.y + 2) * T * cam.z;
-  }
+  if (hub) centerOn(hub);
 
   const hashSeed = (str) => {
     let h = 2166136261;
@@ -782,7 +796,8 @@ async function main() {
   });
 
   document.getElementById('hud-alerts').onclick = () => {
-    document.getElementById('alerts').classList.toggle('open');
+    const box = document.getElementById('alerts');
+    if (!box.classList.toggle('open')) box.dataset.sig = ''; // force a rebuild on reopen
     refreshAlerts();
   };
 

@@ -671,4 +671,4 @@ git commit -m "feat(ui): alert chip listing red machines and throttled power net
 
 - `./manage.sh test` passes.
 - Every browser check in Tasks 3, 4 and 5 has been performed against a running dev server.
-- `git status` is clean and the branch holds five commits.
+- `git status` is clean and the branch holds six commits.

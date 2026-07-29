@@ -13,12 +13,13 @@
 - **Alerts**: a `⚠ N` chip in the HUD counts red machines plus throttled networks;
   clicking opens a list, and clicking an entry pans the camera to the culprit and
   selects it. Throttled networks are one entry each, not one per machine.
-- **Machine analytics**: miners, machines and generators bank lifetime `made` and
-  green/yellow/red state-time; the inspector shows `84% uptime · 1,204 produced`.
-  Plain numbers, so saves and offline simulation carry them with no special casing.
+- **Machine analytics**: miners and machines bank lifetime `made`; miners, machines,
+  generators and containers bank green/yellow/red state-time; the inspector shows
+  `84% uptime · 1,204 produced`. Plain numbers, so saves and offline simulation carry
+  them with no special casing.
 - Tests: `lightOf()` across every status and the throttle boundary, ratio storage,
   brownout detection, production conservation through a miner → smelter → HUB chain,
-  and uptime accumulating identically live and offline.
+  and uptime agreeing within one offline step live vs. offline.
 
 ## 2026-07-27 — Offline Progress, Space Elevator & QoL
 

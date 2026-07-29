@@ -489,6 +489,8 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   tick(s, 0.1, ctx);
   assert.equal(m.ratio, 1, 'fully supplied miner runs at ratio 1');
   assert.equal(b.ratio, 1, 'a node that draws no power reports ratio 1');
+  const hub = s.nodes.find((n) => n.key === 'the-hub');
+  assert.equal(hub.ratio, 1, 'ratio is written even for a node type that gets no light');
 }
 
 // brownout: an oversubscribed network throttles, still reports "mining", lights yellow
@@ -576,6 +578,28 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.ok(Math.abs(dark.tRed - 10) < 1e-6, `unpowered miner banks red time, got ${dark.tRed}`);
   assert.equal(dark.tGreen, undefined, 'never green, never allocated');
   assert.equal(dark.made, undefined, 'never produced');
+}
+
+// miner buffer clamps at BUF_CAP: made only banks what actually fit, not the raw
+// uncapped per-tick gain
+{
+  const s = newGame(53, ctx);
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const d = addDeposit(s, 'iron-ore', 'mineral', 'pure', 2, 5, 5); // pure: mult 2
+  // miner-mk3: 240/min base * mult 2 = 8/s uncapped -> 0.8/tick at dt=0.1, well over
+  // the 0.1 of headroom below
+  const m = addNode(s, 'miner-mk3', 10, 5, ctx);
+  const b = addNode(s, 'biomass-burner', 10, 12, ctx);
+  b.buf.wood = 50;
+  addWire(s, d, 'out0', m, 'res0', ctx);
+  addWire(s, b, 'pout', m, 'pin', ctx);
+  m.buf['iron-ore'] = 99.9; // just under the cap (100 — BUF_CAP is not exported)
+  const madeBefore = m.made ?? 0;
+  tick(s, 0.1, ctx);
+  assert.equal(m.buf['iron-ore'], 100, 'buffer clamps exactly at the cap');
+  assert.ok(Math.abs((m.made - madeBefore) - 0.1) < 1e-9,
+    `made grows by only the amount that fit, got ${m.made - madeBefore}`);
 }
 
 console.log('all sim checks passed');
