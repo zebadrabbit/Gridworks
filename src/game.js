@@ -623,8 +623,10 @@ function alertList() {
   const nets = {};
   for (const n of state.nodes) {
     const def = ctx.catalog[n.key];
-    if (S.lightOf(n, def) === 'red') out.push({ id: n.id, text: `${def.name} — ${n.status}` });
-    // ratio 0 means the network is dead, and those machines are already listed as red
+    const light = S.lightOf(n, def);
+    // A red machine is attributed to its own status (no deposit/recipe/fuel/power), never
+    // to the network, even if it also happens to sit on a throttled or dead grid.
+    if (light === 'red') { out.push({ id: n.id, text: `${def.name} — ${n.status}` }); continue; }
     if (n._net != null && n.ratio > 0 && n.ratio < S.THROTTLE_LIGHT) (nets[n._net] ??= []).push(n);
   }
   for (const group of Object.values(nets)) {
