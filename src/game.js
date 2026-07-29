@@ -9,6 +9,9 @@ const TYPE_COLOR = {
   generator: '#f4d03f', hub: '#ff6b81', deposit: '#8d6e63', logistic: '#58d68d',
   elevator: '#c084fc',
 };
+// status-light colors, matching .status.bad/.warn/.good in style.css.
+// no white entry: overclocking, the only thing that would emit it, does not exist yet.
+const LIGHT_COLOR = { red: '#ff7675', yellow: '#f4d03f', green: '#58d68d' };
 const DEP_STYLE = {
   mineral: { fill: '#241c14', edge: '#8d6e63' },
   oil: { fill: '#15151c', edge: '#7d7d8f' },
@@ -174,7 +177,8 @@ function panel(x, y, w, h, edge, glow) {
 function drawNode(n) {
   const def = ctx.catalog[n.key];
   const r = nodePx(n);
-  const color = TYPE_COLOR[def.type] ?? '#4dd8ff';
+  const light = S.lightOf(n, def);
+  const color = LIGHT_COLOR[light] ?? TYPE_COLOR[def.type] ?? '#4dd8ff';
 
   if (def.type === 'deposit') {
     const st = DEP_STYLE[n.cat];
@@ -202,8 +206,7 @@ function drawNode(n) {
 
   cx.fillStyle = '#e8f6ff'; cx.font = 'bold 10px monospace'; cx.textAlign = 'center';
   cx.fillText(def.name, r.x + r.w / 2, r.y + 14, r.w - 10);
-  const bad = ['no power', 'no fuel', 'no recipe'].includes(n.status);
-  cx.fillStyle = bad ? '#ff7675' : '#7a8aa0'; cx.font = '9px monospace';
+  cx.fillStyle = light === 'red' ? LIGHT_COLOR.red : '#7a8aa0'; cx.font = '9px monospace';
   cx.fillText(n.status, r.x + r.w / 2, r.y + 25, r.w - 8);
 
   if (def.type === 'machine' && n.recipe) {
