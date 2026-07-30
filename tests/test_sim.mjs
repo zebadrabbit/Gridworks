@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, weightAt, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, CHUNK, CHUNK_W, CHUNK_H, chunkIndex, removeNode, revealAll } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, CHUNK, CHUNK_W, CHUNK_H, chunkIndex, removeNode, revealAll } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -714,19 +714,20 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.equal(ctx.resources.filter((r) => r.category === 'plant').length, 0,
     'there is no plant resource category — leaves must stay hardcoded in the scatter');
   // tier 0 peaks at the hub and dies off with distance
-  assert.ok(weightAt(res('iron-ore'), 0) > weightAt(res('iron-ore'), 0.5),
-    'iron is commoner near the hub');
-  assert.equal(weightAt(res('iron-ore'), 1), 0, 'tier 0 cannot spawn at the map edge');
+  assert.ok(tierFactor('iron-ore', 0) > tierFactor('iron-ore', 0.5),
+    'iron prefers positions near the hub');
+  assert.equal(tierFactor('iron-ore', 1), 0, 'tier 0 cannot spawn at the map edge');
   // tier 4 peaks at the edge; both of these points are also zeroed by band decay alone
   // (band dies below t=0.65 for tier 4), so the floor is redundant here — band-decay checks.
-  assert.equal(weightAt(res('uranium'), 0), 0, 'band decay zeroes uranium at the hub (floor coincides)');
-  assert.equal(weightAt(res('uranium'), 0.59), 0, 'band decay zeroes uranium at t=0.59, below the 0.65 band edge (floor coincides)');
-  assert.ok(weightAt(res('uranium'), 1) > 0, 'uranium can spawn at the map edge');
-  assert.ok(weightAt(res('nitrogen-gas'), 0.3) === 0 && weightAt(res('nitrogen-gas'), 0.8) > 0,
+  assert.equal(tierFactor('uranium', 0), 0, 'band decay zeroes uranium at the hub (floor coincides)');
+  assert.equal(tierFactor('uranium', 0.59), 0, 'band decay zeroes uranium at t=0.59, below the 0.65 band edge (floor coincides)');
+  assert.ok(tierFactor('uranium', 1) > 0, 'uranium can spawn at the map edge');
+  assert.ok(tierFactor('nitrogen-gas', 0.3) === 0 && tierFactor('nitrogen-gas', 0.8) > 0,
     'nitrogen-gas shares the tier-3 floor (t=0.3 is band decay; t=0.8 is past the floor, not testing it either)');
-  // real JSON weights are attenuated, never replaced
-  assert.ok(weightAt(res('iron-ore'), 0) > weightAt(res('limestone'), 0),
-    'iron stays commoner than limestone at the same distance (307 vs 233)');
+  // How common a resource is comes from its JSON weight and nothing else — distance decides
+  // where a pick lands, never how often it is picked (see the abundance sweep below).
+  assert.ok(res('iron-ore').weight > res('limestone').weight,
+    'iron is commoner than limestone in the JSON (307 vs 233)');
 }
 
 // tiering actually biases placement across many seeds, and the floor holds on every one
@@ -756,6 +757,80 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.ok(mean(far) - mean(near) >= 0.20,
     `tier 3 spawns further out than tier 0 (near ${mean(near).toFixed(3)}, far ${mean(far).toFixed(3)})`);
   assert.ok(uraniumSeen > 0, 'uranium is still reachable on some seed');
+}
+
+// abundance: how common a resource is comes from its JSON weight, and only from that. Tiering
+// decides where a deposit lands, never how many there are.
+// This is the test whose absence let a real defect ship: scatter() used to sample a position
+// first and then ask which resource belonged there, which tied a resource's map-wide count to
+// the share of the map its tier band covered. Tier 0's band is a small disc around the hub and
+// tier 3's is most of the map, so bauxite (weight 41) outnumbered iron (weight 307) 3.4 to 2.5,
+// and 59% of maps held no iron at all beyond the two guaranteed starters — two Mk1 miners to
+// feed a ladder that wants 200 iron parts at milestone 1 and 200 steel parts at milestone 5.
+{
+  const SEEDS = 1000;
+  const counts = {};    // every mineral deposit
+  const scattered = {}; // starters excluded — the scatter is the part JSON weight governs
+  const tier0T = [];    // where tier 0 ends up, to prove the position side still tiers
+  for (let seed = 5000; seed < 5000 + SEEDS; seed++) {
+    for (const d of genMap(seed, ctx)) {
+      if (tierOf(d.res) === 0) tier0T.push(distT(d.x, d.y));
+      if (d.cat !== 'mineral') continue;
+      counts[d.res] = (counts[d.res] || 0) + 1;
+      if (!d.start) scattered[d.res] = (scattered[d.res] || 0) + 1;
+    }
+  }
+  const per = (m, k) => (m[k] || 0) / SEEDS; // mean deposits per map
+  const minerals = ctx.resources.filter((r) => r.category === 'mineral');
+
+  // a deposit has exactly one output port, so two iron patches means two miners for the whole
+  // early ladder: iron and limestone scarcity is unplayable, not merely annoying
+  assert.ok(per(counts, 'iron-ore') >= 6.0,
+    `iron averages >= 6 deposits per map, got ${per(counts, 'iron-ore').toFixed(2)}`);
+  assert.ok(per(counts, 'limestone') >= 4.5,
+    `limestone averages >= 4.5 deposits per map, got ${per(counts, 'limestone').toFixed(2)}`);
+
+  // the top of the abundance table must be the top of the weight table
+  const ranked = minerals.map((r) => [r.key_name, per(counts, r.key_name)]).sort((a, b) => b[1] - a[1]);
+  const table = ranked.map(([k, v]) => `${k} ${v.toFixed(2)}`).join(', ');
+  assert.equal(ranked[0][0], 'iron-ore', `iron (weight 307) is the commonest mineral: ${table}`);
+  assert.equal(ranked[1][0], 'limestone', `limestone (weight 233) is second: ${table}`);
+  // and no late-tier ore may outnumber coal, however much map area its band covers
+  for (const r of minerals) {
+    if (tierOf(r.key_name) < 2) continue;
+    assert.ok(per(counts, r.key_name) <= per(counts, 'coal'),
+      `${r.key_name} (tier ${tierOf(r.key_name)}, weight ${r.weight}) must not outnumber coal ` +
+      `(weight 141): ${per(counts, r.key_name).toFixed(2)} vs ${per(counts, 'coal').toFixed(2)}`);
+  }
+
+  // The sharp form, and the one that fails if position sampling ever feeds back into the pick:
+  // deposits-per-map divided by JSON weight is one constant across the whole category, tier
+  // regardless. Under the area-driven bug this spread over a factor of 50 (iron 0.0015,
+  // caterium 0.079); even a mild feedback (weight scaled by 1 + tierFactor) pushes iron to
+  // 0.78x and caterium to 1.21x, so the band has to be tight. Measured over 40 disjoint
+  // 1,000-seed windows the true spread is 0.906-1.093, so 0.85-1.15 has room without being
+  // slack. Uranium (weight 7, ~0.17 deposits per map) is too rare to average this tightly.
+  const heavy = minerals.filter((r) => r.weight >= 30);
+  const ratio = (r) => per(scattered, r.key_name) / r.weight;
+  const meanRatio = heavy.reduce((s, r) => s + ratio(r), 0) / heavy.length;
+  for (const r of heavy) {
+    const rel = ratio(r) / meanRatio;
+    assert.ok(rel > 0.85 && rel < 1.15,
+      `${r.key_name} (weight ${r.weight}, tier ${tierOf(r.key_name)}) averages ` +
+      `${per(scattered, r.key_name).toFixed(3)} scattered deposits per map — ` +
+      `${rel.toFixed(2)}x the weight-proportional rate`);
+  }
+
+  // Abundance is now independent of position, which means the tiering needs its own guard here:
+  // deleting the position weighting in scatter() (scoring every candidate equally) leaves every
+  // assertion above happy, and even leaves the tier-3-minus-tier-0 gap above 0.20 — the hard
+  // floor alone earns that. What it does do is move tier 0 out from a mean t of 0.372 to 0.473,
+  // uniform placement. 0.42 sits between the two, ~40x the observed spread of the real figure
+  // (0.3722-0.3759 across 40 disjoint 1,000-seed windows) away from it.
+  const meanT0 = tier0T.reduce((s, v) => s + v, 0) / tier0T.length;
+  assert.ok(meanT0 <= 0.42,
+    `tier-0 deposits average t=${meanT0.toFixed(4)}; above 0.42 means positions are no longer ` +
+    'being chosen for the resource (uniform placement gives ~0.473)');
 }
 
 // every seed hands you a playable start inside the HUB's reveal radius

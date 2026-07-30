@@ -220,30 +220,36 @@ export function distT(x, y) {
   return Math.min(1, Math.hypot(x - (HUB_X + 2), y - (HUB_Y + 2)) / MAX_DIST);
 }
 export function tierOf(res) { return RESOURCE_TIER[res] ?? 0; }
-// How well this distance suits the resource's tier, in [0,1]. Takes a key string rather than
-// a resources entry because `leaves` is an item with no entry in data.resources — the plant
-// scatter needs distance tiering too, and gets it by rejecting positions with 1 - factor odds.
+// How well this distance suits the resource's tier, in [0,1]. It scores a *position* for a
+// resource already chosen — it must never be folded back into the choice of resource, see
+// scatter(). Takes a key string rather than a resources entry because `leaves` is an item with
+// no entry in data.resources, and the plant scatter needs tiering too.
 export function tierFactor(res, t) {
   const tier = tierOf(res);
   if (tier >= 3 && t < FLOOR_T) return 0;
   return Math.max(0, 1 - Math.abs(t - tier / 4) / TIER_BAND);
 }
-// the JSON's own weight, attenuated — never replaced
-export function weightAt(r, t) { return r.weight * tierFactor(r.key_name, t); }
+// Candidate positions each scattered deposit chooses between, and the score floor an
+// out-of-band candidate keeps (see scatter). The floor is what holds the deposit count up:
+// measured over 3,000 seeds, POS_FLOOR = 0 drops the mean map from 48 deposits to 42.2 with a
+// worst case of 36 — under the tests' >= 40 assertion — because tier 0 wants ~24 deposits in a
+// disc that only fits ~15. Any value above 0 fixes that equally; smaller is sharper tiering.
+const POS_TRIES = 40;
+const POS_FLOOR = 0.005;
 
 export function genMap(seed, ctx) {
   const rng = mulberry32(seed);
   const deposits = [];
-  // weighted pick within one resource category, biased by distance from the hub. Returns
-  // null when every resource in the category is floored out here, so the caller re-rolls
-  // the position instead of forcing a spawn that breaks the tiering.
-  const pickWeighted = (cat, t) => {
+  // weighted pick within one resource category, on the JSON weight alone — distance plays no
+  // part here, it decides *where* the pick goes (see scatter). Returns null only for a category
+  // with no entry in data.resources, which the caller covers with `fixedRes`.
+  const pickWeighted = (cat) => {
     const pool = ctx.resources.filter((r) => r.category === cat);
-    const total = pool.reduce((s, r) => s + weightAt(r, t), 0);
+    const total = pool.reduce((s, r) => s + r.weight, 0);
     if (!(total > 0)) return null;
     let roll = rng() * total;
     for (const r of pool) {
-      roll -= weightAt(r, t);
+      roll -= r.weight;
       if (roll <= 0) return r.key_name;
     }
     return pool[pool.length - 1].key_name;
@@ -257,28 +263,46 @@ export function genMap(seed, ctx) {
     if (start) d.start = true;
     deposits.push(d);
   };
-  // ponytail: 200 tries, up from 60 — a position can now also be rejected on tier grounds,
-  // so rejections are commoner than before. The >= 44 deposit assertion in the tests catches
-  // it if this ever starts starving.
+  // Resource first, position second — and never the other way round. Sampling a position and
+  // then asking what belongs there ties a resource's map-wide count to the *area* of its tier
+  // band rather than to its JSON weight: tier 0's band is a small disc round the hub while tier
+  // 3's covers most of the map, so it made bauxite (weight 41) commoner than iron (weight 307),
+  // and left 59% of maps with no iron beyond the guaranteed starters. Correcting the weight
+  // cannot fix that — under uniform positions a tier-0 resource can never take more than its
+  // band's share of the map — so the correction is on the position side.
+  //
+  // The pick is by JSON weight alone; the position is then drawn from POS_TRIES uniform
+  // candidates by weighted reservoir sampling, with each candidate's weight being how well it
+  // suits *this* resource's tier. Uniform x/y candidates are deliberate: sampling a target
+  // radius instead would cluster points near the hub (area grows with radius), would need
+  // out-of-bounds rejection once t * MAX_DIST exceeds the 80-tile map half-height, and would
+  // have to cope with tier 0's band straddling t=0. Scoring uniform candidates has none of
+  // those failure modes and cannot land off-map.
+  //
+  // POS_FLOOR keeps every free candidate in the running, so a band with no room left degrades
+  // to "the best spot still available" rather than dropping the deposit. Tier 0 needs that: it
+  // wants ~24 deposits per map and its disc only fits ~15.
   // `fixedRes` is for categories with no entry in data.resources (only `plant`, whose
-  // `leaves` is an item): tier the position by rejection instead of by weighted pick.
+  // `leaves` is an item).
   const scatter = (count, cat, fixedRes) => {
     for (let i = 0; i < count; i++) {
-      for (let tries = 0; tries < 200; tries++) {
+      const res = fixedRes || pickWeighted(cat);
+      if (!res) continue;
+      // POS_FLOOR would otherwise buy a floored position a small chance, so the hard floor for
+      // tiers 3-4 is re-checked here rather than left to tierFactor returning 0.
+      const floored = tierOf(res) >= 3;
+      let total = 0, bx = 0, by = 0;
+      for (let tries = 0; tries < POS_TRIES; tries++) {
         const x = 2 + Math.floor(rng() * (WORLD_W - 6));
         const y = 2 + Math.floor(rng() * (WORLD_H - 6));
         if (!free(x, y)) continue;
         const t = distT(x, y);
-        let res = fixedRes;
-        if (res) {
-          if (rng() >= tierFactor(res, t)) continue;
-        } else {
-          res = pickWeighted(cat, t);
-          if (!res) continue;
-        }
-        place(res, cat, x, y);
-        break;
+        if (floored && t < FLOOR_T) continue;
+        const w = tierFactor(res, t) + POS_FLOOR;
+        total += w;
+        if (rng() * total < w) { bx = x; by = y; }
       }
+      if (total > 0) place(res, cat, bx, by);
     }
   };
   // starters first, in a ring that clears the HUB footprint but stays inside START_RADIUS
