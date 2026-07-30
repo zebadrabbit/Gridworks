@@ -822,7 +822,17 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   tick(s, 0.1, ctx);
   assert.equal(s.explored.reduce((a, v) => a + v, 0), after, 'revealed is permanent');
   simulateOffline(s, 600, ctx);
-  assert.ok(s.explored.reduce((a, v) => a + v, 0) >= after, 'offline never un-reveals');
+  assert.equal(s.explored.reduce((a, v) => a + v, 0), after, 'offline never un-reveals');
+
+  // moving a node invalidates its cache and reveals new surroundings
+  const mover = addNode(s, 'storage-container', 5, 5, ctx);
+  tick(s, 0.1, ctx);
+  const beforeMove = s.explored.reduce((a, v) => a + v, 0);
+  mover.x = 230; mover.y = 150; // move to the far corner
+  tick(s, 0.1, ctx);
+  const afterMove = s.explored.reduce((a, v) => a + v, 0);
+  assert.ok(afterMove > beforeMove, 'moving a building reveals new chunks');
+  assert.equal(s.explored[chunkIndex(230, 150)], 1, 'moved building reveals its new position');
 
   // survives a save round-trip, and old saves without it get a valid default
   const rt = normalizeSave(JSON.parse(JSON.stringify(s)), ctx);

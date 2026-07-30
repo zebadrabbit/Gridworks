@@ -178,16 +178,18 @@ export function chunkIndex(tx, ty) {
 // building you own. Deposits reveal nothing — they are scenery, not yours.
 // ponytail: called from tick() rather than from every mutation site, so placing, dragging,
 // deleting, loading and offline credit all reveal correctly with no call site to forget.
-// Cost is bounded by each node's own bounding box (~36 chunks at NODE_RADIUS), and the
-// already-revealed short-circuit makes the steady state nearly free. Revisit if node counts
-// ever reach the thousands, at which point reveal-on-change earns its bookkeeping.
+// Each node caches its last-processed position in n._fog to skip the bounding-box loop if
+// unmoved. Moving a node invalidates the cache. Cost is O(moved buildings × chunks per radius).
 export function revealAll(state, ctx) {
   if (!Array.isArray(state.explored) || state.explored.length !== CHUNK_W * CHUNK_H) {
     state.explored = new Array(CHUNK_W * CHUNK_H).fill(0);
+    for (const n of state.nodes) delete n._fog; // the cache is meaningless against a fresh array
   }
   for (const n of state.nodes) {
     const def = ctx.catalog[n.key];
     if (def.type === 'deposit') continue;
+    // already revealed from exactly this position; moving the node invalidates it
+    if (n._fog === n.x * 4096 + n.y) continue;
     const r = def.type === 'hub' ? START_RADIUS : NODE_RADIUS;
     const nx = n.x + def.size / 2, ny = n.y + def.size / 2;
     const x0 = Math.max(0, Math.floor((nx - r) / CHUNK));
@@ -203,6 +205,7 @@ export function revealAll(state, ctx) {
         }
       }
     }
+    n._fog = n.x * 4096 + n.y;
   }
 }
 
@@ -499,7 +502,7 @@ export function normalizeSave(raw, ctx) {
   const ids = new Set(s.nodes.map((n) => n.id));
   s.wires = s.wires.filter((w) => ids.has(w.a.n) && ids.has(w.b.n));
   for (const w of s.wires) { w.style ??= 'noodle'; w.pts ??= []; }
-  for (const n of s.nodes) delete n._net;
+  for (const n of s.nodes) { delete n._net; delete n._fog; }
   if (!s.nodes.some((n) => n.key === 'the-hub')) return null;
   return s;
 }
