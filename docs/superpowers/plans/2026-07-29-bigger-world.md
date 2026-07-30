@@ -448,5 +448,10 @@ git commit -m "feat(ui): dock the minimap in the inspector with a collapse contr
 
 - `./manage.sh test` passes.
 - Every browser check in Task 3 has been performed against a running dev server.
-- `grep -rn "explored\|revealAll\|_fog\|chunkIndex\|fogOn\|btn-fog" src/ tests/ index.html` returns nothing.
-- `git status` is clean and the branch holds three commits.
+- `grep -rn "revealAll\|chunkIndex\|fogOn\|btn-fog\|NODE_RADIUS\|CHUNK" src/ tests/ index.html`
+  returns nothing. Note this pattern deliberately omits `explored` and `_fog`: `normalizeSave`
+  keeps `delete s.explored` and `delete n._fog` on purpose, to strip the dead data that saves
+  written while fog existed still carry. An earlier draft of this section grepped for those two
+  as well, which made it unsatisfiable against the plan's own instructions.
+- `git status` is clean. Commit count is whatever the fix rounds produced — do not treat a fixed
+  number as an acceptance criterion.
