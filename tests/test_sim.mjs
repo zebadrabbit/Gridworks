@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, CHUNK, CHUNK_W, CHUNK_H, chunkIndex, removeNode, revealAll } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, removeNode } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -868,87 +868,6 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.ok(deps.length >= 44 && deps.length <= 48,
     `map still holds ~48 deposits, got ${deps.length}`);
   assert.equal(START_BUNDLE.length, 7, 'bundle is 7 deposits: 4 mineral, 2 plant, 1 water');
-}
-
-// fog of war: explored chunks accumulate around owned buildings and never un-reveal
-{
-  assert.equal(CHUNK_W * CHUNK_H, 600, '240x160 world in 8-tile chunks is 600 chunks');
-  assert.equal(chunkIndex(0, 0), 0);
-  assert.equal(chunkIndex(7, 7), 0, 'a chunk covers 8 tiles');
-  assert.equal(chunkIndex(8, 0), 1);
-  assert.equal(chunkIndex(0, 8), CHUNK_W, 'row 1 starts one chunk-row in');
-
-  const s = newGame(3000, ctx);
-  assert.equal(s.explored.length, 600, 'a new game has an explored array');
-  // the hub reveals its own chunk, and the guaranteed starters are inside that reveal
-  assert.equal(s.explored[chunkIndex(HUB_X + 2, HUB_Y + 2)], 1, 'hub chunk is revealed');
-  for (const d of s.nodes.filter((n) => n.key === 'deposit')) {
-    if (distT(d.x, d.y) * MAX_DIST <= START_RADIUS) {
-      assert.equal(s.explored[chunkIndex(d.x, d.y)], 1,
-        `starter ${d.res} at ${d.x},${d.y} is inside the hub reveal`);
-    }
-  }
-  // the far corner is not revealed by the hub alone
-  assert.equal(s.explored[chunkIndex(2, 2)], 0, 'the map corner starts fogged');
-
-  // deposits are not yours and reveal nothing; a building you place does.
-  // Drop the deposits first so the chosen spot cannot be blocked by a seed-dependent one.
-  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
-  const before = s.explored.reduce((a, v) => a + v, 0);
-  const far = addNode(s, 'storage-container', 20, 20, ctx);
-  assert.ok(far, 'container placed in the fog');
-  tick(s, 0.1, ctx);
-  const after = s.explored.reduce((a, v) => a + v, 0);
-  assert.ok(after > before, `placing a building reveals chunks (${before} -> ${after})`);
-  assert.equal(s.explored[chunkIndex(20, 20)], 1, 'its own chunk is revealed');
-
-  // reveal is monotone — deleting the building does not re-fog, online or offline
-  removeNode(s, far.id);
-  tick(s, 0.1, ctx);
-  assert.equal(s.explored.reduce((a, v) => a + v, 0), after, 'revealed is permanent');
-  simulateOffline(s, 600, ctx);
-  assert.equal(s.explored.reduce((a, v) => a + v, 0), after, 'offline never un-reveals');
-
-  // moving a node invalidates its cache and reveals new surroundings
-  const mover = addNode(s, 'storage-container', 5, 5, ctx);
-  tick(s, 0.1, ctx);
-  const beforeMove = s.explored.reduce((a, v) => a + v, 0);
-  mover.x = 230; mover.y = 150; // move to the far corner
-  tick(s, 0.1, ctx);
-  const afterMove = s.explored.reduce((a, v) => a + v, 0);
-  assert.ok(afterMove > beforeMove, 'moving a building reveals new chunks');
-  assert.equal(s.explored[chunkIndex(230, 150)], 1, 'moved building reveals its new position');
-
-  // survives a save round-trip, and old saves without it get a valid default
-  const rt = normalizeSave(JSON.parse(JSON.stringify(s)), ctx);
-  assert.deepEqual(rt.explored, s.explored, 'explored survives save/normalize');
-  const old = JSON.parse(JSON.stringify(s));
-  delete old.explored;
-  const fixed = normalizeSave(old, ctx);
-  assert.equal(fixed.explored.length, 600, 'a save written before fog gets a default');
-  // a save from a differently-sized world is repaired rather than trusted
-  const wrong = JSON.parse(JSON.stringify(s));
-  wrong.explored = [1, 1, 1];
-  const r2 = normalizeSave(wrong, ctx);
-  assert.equal(r2.explored.length, 600, 'wrong-length explored repaired');
-  // normalizeSave's own `delete n._fog` (separate from revealAll's) must actually run, or a
-  // node's stale cache survives the repair and revealAll silently skips it forever, leaving
-  // the repaired array permanently black. r2.explored is already exactly 600 long by this
-  // point, so revealAll's own array-repair branch does NOT fire here — this isolates
-  // normalizeSave's guard specifically.
-  revealAll(r2, ctx);
-  assert.equal(r2.explored[chunkIndex(HUB_X + 2, HUB_Y + 2)], 1, 'reveal recovers after repair');
-
-  // revealAll's own array-repair branch has the same guard, and must be tested independently:
-  // corrupt explored directly on a live state (bypassing normalizeSave entirely) so revealAll's
-  // internal repair-and-clear-cache branch is what has to fire.
-  const s2 = newGame(3001, ctx);
-  tick(s2, 0.1, ctx); // populates the hub's _fog cache at its current position
-  s2.explored = [1, 1, 1]; // corrupt in place, bypassing normalizeSave
-  revealAll(s2, ctx);
-  assert.equal(s2.explored.length, 600, 'revealAll itself repairs a wrong-length explored array');
-  assert.equal(s2.explored[chunkIndex(HUB_X + 2, HUB_Y + 2)], 1,
-    'revealAll recovers reveal after repairing in place, even with a stale _fog cache');
 }
 
 console.log('all sim checks passed');

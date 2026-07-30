@@ -147,7 +147,7 @@ const RESOURCE_TIER = {
 };
 const TIER_BAND = 0.35; // half-width of a tier's band; wide enough that neighbours overlap
 const FLOOR_T = 0.6;    // tiers 3-4 cannot spawn nearer the hub than this
-export const START_RADIUS = 40; // HUB fog reveal radius, and the guaranteed-start band
+export const START_RADIUS = 40; // the guaranteed-start band
 // computed rather than hardcoded so it stays correct if the world is ever resized
 export const MAX_DIST = Math.hypot(WORLD_W / 2, WORLD_H / 2);
 
@@ -160,60 +160,6 @@ export const START_BUNDLE = [
   ['leaves', 'plant'], ['leaves', 'plant'],
   ['water', 'water'],
 ];
-
-// -------------------------------------------------------------------------
-// Fog is aesthetic: it hides deposits you have not been near, and gates nothing. Tracked at
-// 8-tile granularity so the 240x160 world is 600 flags instead of 38,400 — small enough to
-// live in the save as a plain array, with no Set mirror to fall out of sync.
-export const CHUNK = 8;
-export const CHUNK_W = WORLD_W / CHUNK;
-export const CHUNK_H = WORLD_H / CHUNK;
-export const NODE_RADIUS = 24; // tiles a normal building reveals; the HUB reveals START_RADIUS
-
-export function chunkIndex(tx, ty) {
-  return Math.floor(ty / CHUNK) * CHUNK_W + Math.floor(tx / CHUNK);
-}
-
-// Idempotent and monotone: a chunk is revealed once its centre falls within reach of any
-// building you own. Deposits reveal nothing — they are scenery, not yours.
-// ponytail: called from tick() rather than from every mutation site, so placing, dragging,
-// deleting, loading and offline credit all reveal correctly with no call site to forget.
-// Each node caches its last-processed position in n._fog to skip the bounding-box loop if
-// unmoved. Moving a node invalidates the cache. Cost is O(moved buildings × chunks per radius)
-// for the reveal work itself, PLUS an unconditional O(all nodes) scan every call just to check
-// each node's cache. That second term is not free: measured during offline catch-up (where this
-// runs once per tick via simulateOffline's loop) it was 1.20s of a 10.8s catch-up at 247 nodes,
-// and 5.49s of a 45.6s catch-up at 1,047 nodes — roughly 11% of the total either way. Acceptable
-// today; if it needs trimming, add a dirty flag so unmoved states skip the call entirely, or
-// hoist the call out of simulateOffline's loop so it runs once after, not once per tick.
-export function revealAll(state, ctx) {
-  if (!Array.isArray(state.explored) || state.explored.length !== CHUNK_W * CHUNK_H) {
-    state.explored = new Array(CHUNK_W * CHUNK_H).fill(0);
-    for (const n of state.nodes) delete n._fog; // the cache is meaningless against a fresh array
-  }
-  for (const n of state.nodes) {
-    const def = ctx.catalog[n.key];
-    if (def.type === 'deposit') continue;
-    // already revealed from exactly this position; moving the node invalidates it
-    if (n._fog === n.x * 4096 + n.y) continue;
-    const r = def.type === 'hub' ? START_RADIUS : NODE_RADIUS;
-    const nx = n.x + def.size / 2, ny = n.y + def.size / 2;
-    const x0 = Math.max(0, Math.floor((nx - r) / CHUNK));
-    const x1 = Math.min(CHUNK_W - 1, Math.floor((nx + r) / CHUNK));
-    const y0 = Math.max(0, Math.floor((ny - r) / CHUNK));
-    const y1 = Math.min(CHUNK_H - 1, Math.floor((ny + r) / CHUNK));
-    for (let cy = y0; cy <= y1; cy++) {
-      for (let cxi = x0; cxi <= x1; cxi++) {
-        const i = cy * CHUNK_W + cxi;
-        if (state.explored[i]) continue;
-        if (Math.hypot(cxi * CHUNK + CHUNK / 2 - nx, cy * CHUNK + CHUNK / 2 - ny) <= r) {
-          state.explored[i] = 1;
-        }
-      }
-    }
-    n._fog = n.x * 4096 + n.y;
-  }
-}
 
 // distance from the HUB centre (it is a 4-tile building, so centre is +2), normalized to [0,1]
 export function distT(x, y) {
@@ -313,15 +259,9 @@ export function genMap(seed, ctx) {
       const x = Math.round(HUB_X + 2 + Math.cos(a) * rad);
       const y = Math.round(HUB_Y + 2 + Math.sin(a) * rad);
       if (x < 2 || y < 2 || x > WORLD_W - 4 || y > WORLD_H - 4) continue;
-      // x and y are rounded independently, so the integer point can sit up to ~0.7 tiles
-      // further out than `rad` — enough to break the "inside START_RADIUS" guarantee. Re-check
-      // the constraint on the rounded coordinates, which is where it actually has to hold.
-      // The bound is START_RADIUS - CHUNK, not START_RADIUS: visibility is decided by whether
-      // a chunk's CENTRE is within reach (see revealAll), and a tile can sit up to ~CHUNK/2
-      // tiles from its own chunk centre. Without this margin, a starter placed near the edge
-      // of START_RADIUS can land in a chunk whose centre falls just outside it — guaranteed to
-      // exist, but permanently fogged on frame one. Do not simplify this back to START_RADIUS.
-      if (distT(x, y) * MAX_DIST > START_RADIUS - CHUNK) continue;
+      // x and y are rounded independently, so the integer point can sit further out than `rad`
+      // — re-check on the rounded coordinates, which is where the bound has to hold.
+      if (distT(x, y) * MAX_DIST > START_RADIUS) continue;
       if (!free(x, y)) continue;
       place(res, cat, x, y, true);
       break;
@@ -349,7 +289,6 @@ export function newGame(seed, ctx) {
   for (const d of genMap(seed, ctx)) addDeposit(state, d.res, d.cat, d.purity, d.mult, d.x, d.y);
   const hub = addNode(state, 'the-hub', HUB_X, HUB_Y, ctx);
   hub.fixed = true;
-  revealAll(state, ctx); // so a fresh map renders its start area on the very first frame
   return state;
 }
 
@@ -530,14 +469,12 @@ export function normalizeSave(raw, ctx) {
   s.pipeMark ??= 0;
   s.shipped ??= {};
   s.elevator ??= { phase: 0, progress: {} };
-  if (!Array.isArray(s.explored) || s.explored.length !== CHUNK_W * CHUNK_H) {
-    s.explored = new Array(CHUNK_W * CHUNK_H).fill(0);
-  }
+  delete s.explored; // fog is gone; drop the array old saves still carry
   s.nodes = s.nodes.filter((n) => ctx.catalog[n.key]);
   const ids = new Set(s.nodes.map((n) => n.id));
   s.wires = s.wires.filter((w) => ids.has(w.a.n) && ids.has(w.b.n));
   for (const w of s.wires) { w.style ??= 'noodle'; w.pts ??= []; }
-  for (const n of s.nodes) { delete n._net; delete n._fog; }
+  for (const n of s.nodes) delete n._net;
   if (!s.nodes.some((n) => n.key === 'the-hub')) return null;
   return s;
 }
@@ -615,7 +552,6 @@ function supplying(node, def) {
 
 export function tick(state, dt, ctx) {
   const nets = powerNetworks(state, ctx);
-  revealAll(state, ctx);
   const ratioOf = (node) => {
     const def = ctx.catalog[node.key];
     if (!(def.draw > 0)) return 1;

@@ -71,8 +71,6 @@ aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
 #hud-alerts { color: #ff7675; border-color: #5c2323; background: #2c1212; }
 #hud-alerts:hover { background: #451b1b; }
 
-#btn-fog.off { opacity: .45; }
-
 #alerts { position: fixed; top: 46px; width: 300px; max-height: 50vh; overflow-y: auto;
   background: rgba(10,13,20,.92); border: 1px solid #1d2733; border-radius: 6px;
   backdrop-filter: blur(4px); padding: 6px; z-index: 20; display: none; }

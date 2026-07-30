@@ -12,14 +12,6 @@ const TYPE_COLOR = {
 // status-light colors, matching .status.bad/.warn/.good in style.css.
 // no white entry: overclocking, the only thing that would emit it, does not exist yet.
 const LIGHT_COLOR = { red: '#ff7675', yellow: '#f4d03f', green: '#58d68d' };
-// Fog is a display preference, so it lives in its own localStorage key rather than the save:
-// it must survive New Map and save import, which anything inside the save would not.
-const FOG_KEY = 'gridworks-fog';
-let fogOn = localStorage.getItem(FOG_KEY) !== '0';
-// a deposit you have not been near is not drawn, and not hit-tested — placing any building
-// next to it reveals its chunk first, so this can never block wiring a miner to it
-const hidden = (n) => fogOn && ctx.catalog[n.key].type === 'deposit' &&
-  !state.explored?.[S.chunkIndex(n.x, n.y)];
 const DEP_STYLE = {
   mineral: { fill: '#241c14', edge: '#8d6e63' },
   oil: { fill: '#15151c', edge: '#7d7d8f' },
@@ -58,7 +50,6 @@ function portPos(node, port) {
 
 function portAt(wx, wy) {
   for (const node of state.nodes) {
-    if (hidden(node)) continue;
     for (const port of S.portsOf(node, ctx)) {
       const p = portPos(node, port);
       if (Math.hypot(p.x - wx, p.y - wy) < 9 / cam.z + 4) return { node, port };
@@ -68,7 +59,6 @@ function portAt(wx, wy) {
 }
 function nodeAt(wx, wy) {
   for (let i = state.nodes.length - 1; i >= 0; i--) {
-    if (hidden(state.nodes[i])) continue;
     const r = nodePx(state.nodes[i]);
     if (wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h) return state.nodes[i];
   }
@@ -192,7 +182,6 @@ function drawNode(n) {
   const color = LIGHT_COLOR[light] ?? TYPE_COLOR[def.type] ?? '#4dd8ff';
 
   if (def.type === 'deposit') {
-    if (hidden(n)) return;
     const st = DEP_STYLE[n.cat];
     cx.beginPath(); cx.roundRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, 8);
     cx.fillStyle = st.fill; cx.fill();
@@ -320,14 +309,6 @@ function mmToWorld(e) {
 
 function drawMinimap() {
   mcx.clearRect(0, 0, mm.width, mm.height);
-  // explored chunks lift out of the background; with fog off, the whole world is lit
-  mcx.fillStyle = 'rgba(77,216,255,0.07)';
-  for (let i = 0; i < S.CHUNK_W * S.CHUNK_H; i++) {
-    if (fogOn && !state.explored?.[i]) continue;
-    const cxi = i % S.CHUNK_W, cy = Math.floor(i / S.CHUNK_W);
-    mcx.fillRect(cxi * S.CHUNK * MM_SCALE, cy * S.CHUNK * MM_SCALE,
-      S.CHUNK * MM_SCALE, S.CHUNK * MM_SCALE);
-  }
   // deposits, then buildings worst-last so one red machine is never painted over by a
   // healthy neighbour — clusters overlap at this scale, so draw order is the whole signal
   const dot = (n, color, size) => {
@@ -336,7 +317,7 @@ function drawMinimap() {
   };
   for (const n of state.nodes) {
     const def = ctx.catalog[n.key];
-    if (def.type !== 'deposit' || hidden(n)) continue;
+    if (def.type !== 'deposit') continue;
     dot(n, DEP_STYLE[n.cat].edge, 2);
   }
   for (const want of [null, 'green', 'yellow', 'red']) {
@@ -379,7 +360,6 @@ function mmHover(e) {
   // would silently reject every one of them more than a single tile from the cursor
   let best = null, bestScore = -Infinity;
   for (const n of state.nodes) {
-    if (hidden(n)) continue;
     const d = Math.hypot(n.x - w.x, n.y - w.y);
     if (d > reach) continue;
     const score = (LIGHT_RANK[S.lightOf(n, ctx.catalog[n.key])] ?? 0) * 1000 - d;
@@ -841,8 +821,6 @@ async function main() {
   const data = await (await fetch('data/source/satisfactory_data.json')).json();
   ctx = S.buildCtx(data);
   state = load() ?? S.newGame((Math.random() * 1e9) | 0, ctx);
-  S.revealAll(state, ctx); // newGame already does this, but load()'s normalizeSave path does
-  // not — without this, a loaded save renders fully fogged until the first 0.1s tick fires
   const away = state.savedAt ? (Date.now() - state.savedAt) / 1000 : 0;
   if (away > 60) {
     const before = Object.values(state.shipped).reduce((s, v) => s + v, 0);
@@ -907,14 +885,6 @@ async function main() {
   speedBtn.onclick = () => {
     ui.speed = ui.speed >= 4 ? 1 : ui.speed * 2;
     speedBtn.textContent = ui.speed + 'x';
-  };
-
-  const fogBtn = document.getElementById('btn-fog');
-  fogBtn.classList.toggle('off', !fogOn);
-  fogBtn.onclick = () => {
-    fogOn = !fogOn;
-    localStorage.setItem(FOG_KEY, fogOn ? '1' : '0');
-    fogBtn.classList.toggle('off', !fogOn);
   };
 
   addEventListener('keydown', (e) => {
