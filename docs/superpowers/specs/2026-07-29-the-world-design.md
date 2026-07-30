@@ -160,6 +160,30 @@ machine 130 tiles away becomes a red pixel you can see and click, which is what 
 the "can't find the problem" loop that spec 1 opened: spec 1 made problems visible on the node
 and countable in the HUD, and this makes them locatable on the world.
 
+### Hover tooltip
+
+Colouring by status costs the ability to tell *what* a dot is. A hover tooltip buys it back, and
+costs almost nothing: `#tooltip` and its CSS already exist for canvas ports and wires, so the
+minimap needs a mousemove handler feeding the same element, not a second tooltip system.
+
+At 180×120 for a 240×160 world the scale is 0.75 px per tile, so even a 4-tile HUB is only 3 px
+and dots are effectively sub-pixel. Hit-testing therefore picks the **nearest** node or revealed
+deposit within 5 px of the cursor, rather than testing containment — containment would make most
+dots unhittable.
+
+Contents:
+
+- a building: its name, its status, and its uptime line, reusing `uptimeText()` from spec 1
+- a revealed deposit: resource name, category and purity — useful for scouting where to expand
+- nothing at all when no dot is within range
+
+Fogged deposits are not drawn, so they are not hit-tested and cannot be revealed by hovering.
+
+The tooltip is suppressed while dragging the minimap to pan, matching how the canvas tooltip
+hides during a drag. It is otherwise shown regardless of `ui.mode` — scouting the map while in
+place mode is exactly when it is most wanted, so this deliberately differs from the canvas
+tooltip's `ui.mode !== 'idle'` early return.
+
 The minimap redraws inside the main `draw()` loop rather than on an interval, so the viewport
 rectangle does not lag while panning. That is ~700 small `fillRect` calls per frame, well
 within canvas budget.
@@ -203,8 +227,10 @@ effects toggles; fog folds into a panel then.
   without it gets a valid default.
 - Existing assertions still hold: seed determinism, and at least 30 deposits per map.
 
-Minimap rendering, click-to-pan, the fog toggle and the toggle's persistence are browser
-checks.
+Minimap rendering, click-to-pan, the hover tooltip, the fog toggle and the toggle's persistence
+are browser checks. The tooltip's nearest-dot search stays in `game.js` rather than being pushed
+into `sim.js` to gain coverage — it is screen-space cursor math with no game meaning, and moving
+it would put pixel geometry in the pure-logic module purely to satisfy a test.
 
 ## Out of scope
 
