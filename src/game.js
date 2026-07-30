@@ -437,6 +437,48 @@ function updateTooltip(e) {
   tip.style.top = (e.clientY + 14) + 'px';
 }
 
+// A pointer release and a subsequent click resolve identically against whatever is under the
+// cursor: a compatible port finishes the wire, buildable ground drops a relay pole and keeps the
+// chain going, anything else is ignored. One rule means the existing press-drag-release gesture
+// is untouched, and the same gesture extended past a target simply continues.
+const POLE_FOR = { power: 'power-pole', item: 'conveyor-pole', fluid: 'pipe-pole' };
+
+function resolveWireClick(w) {
+  const from = ui.wireFrom;
+  const a = state.nodes.find((q) => q.id === from.node.id);
+  if (!a) { setMode('idle'); return; }
+
+  const over = portAt(w.x, w.y);
+  if (over) {
+    if (S.canConnect(a, from.port.id, over.node, over.port.id, state, ctx)) {
+      const nw = S.addWire(state, a, from.port.id, over.node, over.port.id, ctx);
+      if (nw) nw.style = ui.wireStyle;
+      setMode('idle');
+      refreshInspector();
+    }
+    return; // an incompatible port is ignored; the chain stays live
+  }
+
+  const key = POLE_FOR[from.port.kind];
+  if (!key) return;
+  const gx = Math.round(w.x / T - 0.5), gy = Math.round(w.y / T - 0.5); // poles are 1x1
+  const chk = S.canPlace(state, key, gx, gy, ctx);
+  if (!chk.ok) { ui.hint = chk.reason ?? ''; return; }
+  const pole = S.addNode(state, key, chk.snap.x, chk.snap.y, ctx);
+  if (!pole) return;
+
+  // connect to whichever pole port accepts the current end, and continue from the other. Chosen
+  // by compatibility rather than by fixed id because a wire can be drawn backwards, from a
+  // machine's input toward its source.
+  const ports = S.portsOf(pole, ctx);
+  const into = ports.find((p) => S.canConnect(a, from.port.id, pole, p.id, state, ctx));
+  if (!into) { S.removeNode(state, pole.id); return; }
+  const nw = S.addWire(state, a, from.port.id, pole, into.id, ctx);
+  if (nw) nw.style = ui.wireStyle;
+  ui.wireFrom = { node: pole, port: ports.find((p) => p.id !== into.id) ?? into };
+  refreshInspector();
+}
+
 canvas.addEventListener('mousedown', (e) => {
   const w = toWorld(e.offsetX, e.offsetY);
   if (e.button === 1 || e.button === 2 || e.ctrlKey) { ui.drag = { pan: true, sx: e.clientX, sy: e.clientY }; return; }
@@ -451,6 +493,10 @@ canvas.addEventListener('mousedown', (e) => {
     }
     return;
   }
+
+  // in wire mode, mouseup does the work — swallow the press so it cannot fall through to
+  // selection or to starting a pan drag
+  if (ui.mode === 'wire' && ui.wireFrom) return;
 
   const h = handleAt(w.x, w.y);
   if (h) { ui.sel = { type: 'wire', id: h.w.id, wp: h.i }; ui.drag = { wp: h }; return; }
@@ -490,8 +536,9 @@ addEventListener('mouseup', () => {
   // a canvas interaction can change what the inspector shows. Rebuilding it on every mouseup
   // destroys the <select> a click just opened (box.innerHTML replaces the element), so the
   // recipe and tier dropdowns closed the instant you pressed them. Check before the body
-  // below clears ui.drag / ui.wireFrom.
-  const fromCanvas = !!ui.drag || (ui.mode === 'wire' && !!ui.wireFrom);
+  // below clears ui.drag / ui.wireFrom. Wire mode is now modal (persists past mouseup), so this
+  // no longer covers it — resolveWireClick refreshes precisely when it changes something instead.
+  const fromCanvas = !!ui.drag;
   if (ui.drag?.node) {
     const n = ui.drag.node;
     const [nx, ny] = [n.x, n.y];
@@ -503,18 +550,9 @@ addEventListener('mouseup', () => {
     } else { n.x = ui.drag.fx; n.y = ui.drag.fy; }
     state.nodes.push(n);
   }
-  if (ui.mode === 'wire' && ui.wireFrom) {
-    const over = portAt(ui.mouse.x, ui.mouse.y);
-    if (over) {
-      const from = ui.wireFrom;
-      const a = state.nodes.find((q) => q.id === from.node.id);
-      if (a) {
-        const nw = S.addWire(state, a, from.port.id, over.node, over.port.id, ctx);
-        if (nw) nw.style = ui.wireStyle;
-      }
-    }
-    setMode('idle');
-  }
+  // `!ui.drag?.pan` matters: a right-drag pan also fires mouseup, and without the check a pan
+  // that ends over open ground would drop a pole where the player only meant to scroll
+  if (ui.mode === 'wire' && ui.wireFrom && !ui.drag?.pan) resolveWireClick(ui.mouse);
   ui.drag = null;
   if (fromCanvas) refreshInspector();
 });

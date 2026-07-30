@@ -987,4 +987,56 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.deepEqual(earned(rt), earned(s), 'earned survives a save round-trip because it is derived');
 }
 
+// wiring: the pole kinds a chain places, and that a chained run actually carries goods
+{
+  // every wire kind that can be drawn maps to a pole that exists and carries that kind
+  const POLE_FOR = { power: 'power-pole', item: 'conveyor-pole', fluid: 'pipe-pole' };
+  for (const [kind, key] of Object.entries(POLE_FOR)) {
+    const def = ctx.catalog[key];
+    assert.ok(def, `${key} exists in the catalog`);
+    assert.equal(def.size, 1, `${key} is a 1-tile relay`);
+    const ports = portsOf({ key, x: 0, y: 0 }, ctx);
+    assert.equal(ports.length, 2, `${key} has exactly one in and one out`);
+    for (const p of ports) assert.equal(p.kind, kind, `${key} port ${p.id} carries ${kind}`);
+    assert.ok(ports.some((p) => p.dir === 'in') && ports.some((p) => p.dir === 'out'),
+      `${key} has both directions`);
+  }
+
+  // a chained item run carries goods end to end through two poles
+  const s = newGame(81, ctx);
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const src = addNode(s, 'storage-container', 5, 5, ctx);
+  src.buf['iron-ore'] = 300;
+  const p1 = addNode(s, 'conveyor-pole', 12, 5, ctx);
+  const p2 = addNode(s, 'conveyor-pole', 18, 5, ctx);
+  const dst = addNode(s, 'storage-container', 24, 5, ctx);
+  assert.ok(addWire(s, src, 'out0', p1, 'in0', ctx), 'source into first pole');
+  assert.ok(addWire(s, p1, 'out0', p2, 'in0', ctx), 'pole chains to pole');
+  assert.ok(addWire(s, p2, 'out0', dst, 'in0', ctx), 'last pole into destination');
+  for (let i = 0; i < 1200; i++) tick(s, 0.1, ctx); // 120s
+  const got = dst.buf['iron-ore'] ?? 0;
+  assert.ok(got > 100, `a two-pole chain carries goods, got ${got}`);
+  const total = (src.buf['iron-ore'] ?? 0) + (p1.buf['iron-ore'] ?? 0)
+    + (p2.buf['iron-ore'] ?? 0) + got;
+  assert.ok(Math.abs(total - 300) < 1, `items conserved through the chain, got ${total}`);
+
+  // a power chain reaches a distant machine, which is what a power-pole run is for
+  const ps = newGame(83, ctx);
+  ps.unlocked.buildings = Object.keys(ctx.catalog);
+  ps.nodes = ps.nodes.filter((n) => n.key === 'the-hub'); ps.wires = [];
+  const dep = addDeposit(ps, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const m = addNode(ps, 'miner-mk1', 10, 5, ctx);
+  const gen = addNode(ps, 'biomass-burner', 60, 60, ctx);
+  gen.buf.wood = 50;
+  const q1 = addNode(ps, 'power-pole', 30, 30, ctx);
+  const q2 = addNode(ps, 'power-pole', 45, 45, ctx);
+  assert.ok(addWire(ps, dep, 'out0', m, 'res0', ctx));
+  assert.ok(addWire(ps, gen, 'pout', q1, 'in0', ctx));
+  assert.ok(addWire(ps, q1, 'out0', q2, 'in0', ctx));
+  assert.ok(addWire(ps, q2, 'out0', m, 'pin', ctx));
+  tick(ps, 0.1, ctx);
+  assert.equal(m.status, 'mining', 'power reaches the miner through a two-pole chain');
+}
+
 console.log('all sim checks passed');
