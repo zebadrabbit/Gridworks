@@ -105,7 +105,12 @@ aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
 
 #tutorial { position: fixed; left: 230px; top: 52px; width: 260px;
   background: rgba(10,13,20,.94); border: 1px solid #23445c; border-radius: 6px;
-  backdrop-filter: blur(4px); padding: 10px; z-index: 25; display: none; }
+  backdrop-filter: blur(4px); padding: 10px;
+  /* Below the #alerts/#achievements/#help dropdowns (z-index 20): this card's x 230-490 span
+     can overlap the ⚠ chip's dropdown at low viewport widths or short seeds (a short
+     #hud-seed shifts every chip left), and an opened dropdown must win that overlap rather
+     than being hidden under this card. */
+  z-index: 15; display: none; }
 #tutorial.open { display: block; }
 #tutorial h3 { font-size: 12px; letter-spacing: 1px; color: #4dd8ff; margin-bottom: 4px; }
 #tutorial p { font-size: 12px; color: #9fb0c3; margin-bottom: 8px; }

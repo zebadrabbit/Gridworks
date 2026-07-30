@@ -8,14 +8,22 @@
   scripted action, so it never dictates how you get there and cannot wedge if you build in a
   different order. It never blocks anything, and Skip or Close dismisses it for good.
 - Progress is **derived, not stored**: the current goal is simply the first unsatisfied predicate,
-  so nothing enters the save and a reload resumes wherever the factory actually is. Only a single
-  completed-or-skipped flag persists, in its own localStorage key so it survives New Map.
+  so nothing enters the save and a reload resumes wherever the factory actually is. A
+  completed / skipped / in-progress marker persists, in its own localStorage key so it survives
+  New Map.
+- **Predicates key off monotonic counters** (`made`, `tGreen`) rather than live `status`, because
+  `status` regresses under backpressure — a Miner Mk1 on a pure deposit saturates a starting-tier
+  belt and flips permanently to `'output full'`, which would otherwise walk the panel backwards to
+  "mine some iron ore" while a working mine→smelt line kept running. Counters only ever increase,
+  so tutorial progress cannot regress.
 - **A `?` card documents the controls that have no contextual hint** — pan, zoom, delete, pause,
   speed, wire style, recipes and the minimap. Place-mode and wire-mode gestures are deliberately
   left out, because the HUD hint already teaches those at the moment they matter.
 - Tests: the five predicates against states that satisfy them and states that do not, specificity
-  between the smelter and constructor goals, a zero shipped entry not counting, and a realistic
-  build satisfying the goals in causal order.
+  between the smelter and constructor goals and between the generator/miner goals and any other
+  producer, a zero shipped entry not counting, a realistic build satisfying the goals in causal
+  order, and a regression test asserting a miner saturated by a pure deposit (status regressed to
+  `'output full'`) does not un-satisfy the mining goal.
 
 ## 2026-07-30 — Wiring Ergonomics
 

@@ -50,8 +50,8 @@ flips permanently to `'output full'`. No node then reports `'mining'`, and the p
 state, not a flicker, and roughly a quarter of deposits are pure.
 
 The lifetime counters added by spec 1 are monotonic by construction: `made` on miners and
-machines, `tGreen` on everything `lightOf` lights, generators included. Keying off those makes the
-causal-order claim below actually true rather than merely plausible.
+machines, `tGreen` on everything `lightOf` lights, generators included. Keying off those is what
+keeps tutorial progress from regressing the way `status` does above.
 
 Step 1 narrows to `biomass-burner` specifically because `tGreen` is tracked for miners and
 machines too, so "any node with `tGreen > 0`" would be satisfied by the wrong thing. That
@@ -73,8 +73,7 @@ state machine. This is the same shape as `ACHIEVEMENTS`, which already proved th
 testable in the only tested file, and adding nothing to the save.
 
 A player who completes a later goal early still sees the earlier one, which is correct: if you
-somehow ship an item before your smelter runs, you skipped nothing you needed — and the earlier
-predicates will already be passing anyway, because the chain is causal.
+somehow ship an item before your smelter runs, you skipped nothing you needed.
 
 ## One boolean, in localStorage
 

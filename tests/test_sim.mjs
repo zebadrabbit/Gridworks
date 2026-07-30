@@ -1082,6 +1082,15 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
     'step 4 is specific to the constructor');
   assert.equal(TUTORIAL[2].test({ nodes: [{ key: 'constructor', made: 1 }], shipped: {} }), false,
     'step 3 is specific to the smelter');
+  // step 1 must not fire on any green node — a Storage Container is unpowered (draw: 0, so
+  // ratioOf always returns 1) and lights green as soon as it holds anything and isn't full,
+  // so an unconditional tGreen check would false-positive "power flowing" with no power at all
+  assert.equal(TUTORIAL[0].test({ nodes: [{ key: 'storage-container', tGreen: 5 }], shipped: {} }), false,
+    'step 1 is specific to the generator — an unpowered container goes green immediately');
+  // step 2 must not fire on any producer — a Constructor running biomass-from-leaves consumes
+  // leaves straight off a plant deposit's item port, with no miner anywhere on the map
+  assert.equal(TUTORIAL[1].test({ nodes: [{ key: 'constructor', made: 1 }], shipped: {} }), false,
+    'step 2 is specific to miners');
   // a zero entry in shipped must not count
   assert.equal(TUTORIAL[4].test({ nodes: [], shipped: { 'iron-plate': 0 } }), false,
     'a zero shipped entry does not satisfy step 5');

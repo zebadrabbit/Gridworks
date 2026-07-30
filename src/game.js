@@ -893,12 +893,12 @@ function refreshAchievements() {
 // themselves in the HUD hint line at the moment they matter, and duplicating them in a static
 // card would rot the first time a gesture changes — as the wire gesture just did.
 const HELP = [
-  ['Pan', 'right-drag, middle-drag, or drag empty ground'],
+  ['Pan', 'right-drag, middle-drag, ctrl-drag, or drag empty ground'],
   ['Zoom', 'mouse wheel'],
   ['Delete', 'select, then Del'],
   ['Pause', 'Space, or the ⏸ button'],
   ['Speed', 'the 1x button cycles 1x / 2x / 4x'],
-  ['Wire style', 'S — per-wire when a wire is selected'],
+  ['Wire style', 'S toggles straight/noodle — per-wire when a wire is selected'],
   ['Recipes', 'select a machine, then the Recipe dropdown'],
   ['Minimap', 'click or drag to jump, hover for detail, − to collapse'],
 ];
@@ -908,6 +908,17 @@ function buildHelp() {
   if (box.dataset.built) return;
   box.dataset.built = '1';
   box.innerHTML = HELP.map(([k, v]) => `<div class="key"><b>${k}</b><span>${v}</span></div>`).join('');
+}
+
+// buildHelp only ever runs once (its content never changes), so unlike refreshAlerts/
+// refreshAchievements nothing else recomputes this panel's left offset after the click handler
+// that opens it — a window resize afterward leaves it clipped until the next toggle. Run this on
+// the same 400ms cadence as the other two dropdowns so it self-corrects the same way.
+function refreshHelp() {
+  const box = document.getElementById('help');
+  if (!box.classList.contains('open')) return;
+  box.style.left =
+    Math.min(document.getElementById('hud-help').getBoundingClientRect().left, innerWidth - 308) + 'px';
 }
 
 function refreshTutorial() {
@@ -922,6 +933,7 @@ function refreshTutorial() {
     box.innerHTML = `<h3>First factory complete</h3>
       <p>That is the whole loop — mine, smelt, craft, ship. Keep shipping to climb the milestones.</p>
       <button id="tut-close">Close</button>`;
+    setTut('skip'); // done rendering the completion card once is the signal — don't re-offer on reload
   } else {
     const i = S.TUTORIAL.indexOf(step) + 1;
     box.innerHTML = `<h3>${step.goal}</h3>
@@ -1148,6 +1160,7 @@ async function main() {
   setInterval(updateMilestonePanel, 400);
   setInterval(refreshAlerts, 400);
   setInterval(refreshAchievements, 400);
+  setInterval(refreshHelp, 400);
   setInterval(refreshTutorial, 400);
   updateMilestonePanel();
   refreshAchievements();
