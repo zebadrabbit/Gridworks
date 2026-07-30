@@ -79,10 +79,10 @@ aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
 #hud-alerts { color: #ff7675; border-color: #5c2323; background: #2c1212; }
 #hud-alerts:hover { background: #451b1b; }
 
-#alerts { position: fixed; top: 46px; width: 300px; max-height: 50vh; overflow-y: auto;
-  background: rgba(10,13,20,.92); border: 1px solid #1d2733; border-radius: 6px;
-  backdrop-filter: blur(4px); padding: 6px; z-index: 20; display: none; }
-#alerts.open { display: block; }
+#alerts, #achievements { position: fixed; top: 46px; width: 300px; max-height: 50vh;
+  overflow-y: auto; background: rgba(10,13,20,.92); border: 1px solid #1d2733;
+  border-radius: 6px; backdrop-filter: blur(4px); padding: 6px; z-index: 20; display: none; }
+#alerts.open, #achievements.open { display: block; }
 #alerts .alert { padding: 5px 7px; border-radius: 4px; cursor: pointer; font-size: 12px;
   color: #ff7675; }
 #alerts .alert.warn { color: #f4d03f; }
@@ -90,4 +90,11 @@ aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
 
 #minimap { display: block; width: 228px; height: 152px;
   background: rgba(10,13,20,.92); outline: 1px solid #1d2733; cursor: crosshair; }
+
+#hud-achievements { color: #f4d03f; border-color: #5c5223; background: #2c2712; }
+#hud-achievements:hover { background: #453b1b; }
+#achievements .ach { padding: 5px 7px; border-radius: 4px; font-size: 12px; color: #58d68d; }
+#achievements .ach.locked { color: #5b6b80; }
+#achievements .ach small { display: block; color: #5b6b80; font-size: 11px; }
+#achievements .ach.locked small { color: #46536b; }
 

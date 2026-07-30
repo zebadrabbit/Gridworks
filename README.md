@@ -12,8 +12,10 @@ status lights red/yellow/green, a `⚠ N` HUD chip lists what needs attention an
 pans the camera there on click, and the inspector tracks each machine's lifetime
 uptime and production. Ore is tiered by distance from the HUB — iron and limestone
 at your feet, uranium 260 tiles out — with a guaranteed playable start, and a minimap docked in
-the inspector tracks your factory's health across a 720×480 world. Existing saves keep the
-map they were generated on; use "New Map" to regenerate at the current world size.
+the inspector tracks your factory's health across a 720×480 world.
+Milestones and Project Assembly phases award achievements, tracked by a 🏆 counter in the HUD.
+Existing saves keep the map they were generated on; use "New Map" to regenerate at the current
+world size.
 
 `data/source/satisfactory_data.json` is the immutable source of truth for all items,
 buildings, recipes, and resource weights (see `docs/SOURCE_OF_TRUTH.md`).
@@ -66,6 +68,8 @@ Tests also run in CI (GitHub Actions) on every push and pull request.
 
 ## Docs
 
+- `docs/superpowers/specs/2026-07-30-achievements-design.md` — derived achievement registry,
+  HUD chip
 - `docs/superpowers/specs/2026-07-29-bigger-world-design.md` — fog removed, 720×480 map,
   docked minimap
 - `docs/superpowers/specs/2026-07-29-the-world-design.md` — tiered ore, fog of war,

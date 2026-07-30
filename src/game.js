@@ -797,6 +797,39 @@ function refreshAlerts() {
   }
 }
 
+// Achievements are derived, so `seen` is a session-lifetime UI concern only — it exists to
+// decide what is NEW since the page loaded, and deliberately never enters the save. It must be
+// re-seeded whenever `state` is replaced, or a loaded or imported save toasts its whole history.
+let seen = new Set();
+function seedAchievements() { seen = new Set(S.earned(state)); }
+
+function refreshAchievements() {
+  const chip = document.getElementById('hud-achievements');
+  const box = document.getElementById('achievements');
+  const got = S.earned(state);
+  chip.textContent = `🏆 ${got.length}/${S.ACHIEVEMENTS.length}`;
+  for (const id of got) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    toast(`🏆 ${S.ACHIEVEMENTS.find((a) => a.id === id).name}`);
+  }
+  if (!box.classList.contains('open')) return;
+  box.style.left = Math.min(chip.getBoundingClientRect().left, innerWidth - 308) + 'px';
+  // ponytail: same signature guard as the alert panel — skip the rebuild when nothing changed,
+  // so a scrolled-open panel keeps its scrollTop across this 400ms tick.
+  const sig = got.join('|');
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  box.innerHTML = '';
+  const set = new Set(got);
+  for (const a of S.ACHIEVEMENTS) {
+    const el = document.createElement('div');
+    el.className = set.has(a.id) ? 'ach' : 'ach locked';
+    el.innerHTML = `${set.has(a.id) ? '🏆' : '🔒'} ${a.name}<small>${a.desc}</small>`;
+    box.appendChild(el);
+  }
+}
+
 function updateHud() {
   const p = state.power ?? { supply: 0, demand: 0 };
   document.getElementById('hud-power').textContent = `⚡ ${fmt(p.demand)} / ${fmt(p.supply)} MW`;
@@ -841,6 +874,7 @@ async function main() {
   const data = await (await fetch('data/source/satisfactory_data.json')).json();
   ctx = S.buildCtx(data);
   state = load() ?? S.newGame((Math.random() * 1e9) | 0, ctx);
+  seedAchievements();
   const away = state.savedAt ? (Date.now() - state.savedAt) / 1000 : 0;
   if (away > 60) {
     const before = Object.values(state.shipped).reduce((s, v) => s + v, 0);
@@ -863,6 +897,7 @@ async function main() {
   const startFresh = (seed) => {
     state = S.newGame(seed, ctx);
     lastPhase = state.elevator?.phase ?? 0;
+    seedAchievements();
     select(null); save(); buildPalette(); updateMilestonePanel();
   };
   document.getElementById('btn-reset').onclick = () => {
@@ -893,6 +928,7 @@ async function main() {
       if (!s) throw new Error('not a Gridworks save');
       state = s;
       lastPhase = state.elevator?.phase ?? 0;
+      seedAchievements();
       select(null); save(); buildPalette(); updateMilestonePanel();
       toast('Save imported');
     } catch (err) { alert('Import failed: ' + err.message); }
@@ -925,10 +961,20 @@ async function main() {
     if (e.key === ' ') { e.preventDefault(); togglePause(); }
   });
 
+  const alertsBox = document.getElementById('alerts');
+  const achBox = document.getElementById('achievements');
+  // both panels anchor to their own chip along the top of the screen, so two open at once
+  // would overlap — opening either closes the other
   document.getElementById('hud-alerts').onclick = () => {
-    const box = document.getElementById('alerts');
-    if (!box.classList.toggle('open')) box.dataset.sig = ''; // force a rebuild on reopen
+    achBox.classList.remove('open');
+    if (!alertsBox.classList.toggle('open')) alertsBox.dataset.sig = ''; // force a rebuild on reopen
     refreshAlerts();
+  };
+  document.getElementById('hud-achievements').onclick = () => {
+    alertsBox.classList.remove('open');
+    alertsBox.dataset.sig = ''; // keep the "force a rebuild on reopen" invariant regardless of what closed it
+    achBox.classList.toggle('open');
+    refreshAchievements();
   };
 
   setInterval(save, 5000);
@@ -936,6 +982,7 @@ async function main() {
   setInterval(updateBuffers, 400);
   setInterval(updateMilestonePanel, 400);
   setInterval(refreshAlerts, 400);
+  setInterval(refreshAchievements, 400);
   updateMilestonePanel();
 
   let last = performance.now(), acc = 0, lastMs = -1, lastPhase = state.elevator?.phase ?? 0;

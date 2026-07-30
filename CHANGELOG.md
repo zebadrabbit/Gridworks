@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-07-30 — Achievements
+
+- **Achievements**, derived rather than stored: both progression counters are monotonic indices,
+  so `earned(state)` is a pure function of state the game already keeps. That means no new save
+  field, nothing to desync, and existing saves show their earned achievements retroactively with
+  no migration.
+- The registry is **generated from `MILESTONES` and `ELEVATOR_PHASES`** rather than hand-listed,
+  so adding a rung adds its achievement automatically and the two can never drift. Eleven to
+  start — seven milestones and four Project Assembly phases, the last of which is the win.
+- A 🏆 chip in the HUD shows `earned/total` and opens a panel listing every achievement, locked
+  ones dimmed with their description. Newly earned ones toast. The chip is always visible, since
+  it is a progress counter rather than a problem count, and it shares the alert panel's styling;
+  opening either panel closes the other.
+- Tests: registry length tracks the two ladders, ids unique, every entry well-formed, a fresh
+  game earns nothing, a mid-run state earns exactly its prefix, a finished run earns everything,
+  the earned set is monotonic as either counter rises, and it survives a save round-trip
+  unchanged because nothing is written.
+
 ## 2026-07-29 — Bigger World
 
 - **Fog of war removed.** It was meant to make the map feel like a frontier, but revealing it
