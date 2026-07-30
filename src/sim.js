@@ -474,7 +474,9 @@ export function normalizeSave(raw, ctx) {
   const ids = new Set(s.nodes.map((n) => n.id));
   s.wires = s.wires.filter((w) => ids.has(w.a.n) && ids.has(w.b.n));
   for (const w of s.wires) { w.style ??= 'noodle'; w.pts ??= []; }
-  for (const n of s.nodes) delete n._net;
+  // _fog is legacy: the fog-of-war cache it belonged to is gone, but saves written while fog
+  // existed still carry it on every node, and nothing else strips it. Drop it on load.
+  for (const n of s.nodes) { delete n._net; delete n._fog; }
   if (!s.nodes.some((n) => n.key === 'the-hub')) return null;
   return s;
 }

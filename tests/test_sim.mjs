@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, removeNode } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
