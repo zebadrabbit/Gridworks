@@ -453,6 +453,7 @@ function resolveWireClick(w) {
     if (S.canConnect(a, from.port.id, over.node, over.port.id, state, ctx)) {
       const nw = S.addWire(state, a, from.port.id, over.node, over.port.id, ctx);
       if (nw) nw.style = ui.wireStyle;
+      ui.hint = '';
       setMode('idle');
       refreshInspector();
     }
@@ -475,6 +476,7 @@ function resolveWireClick(w) {
   if (!into) { S.removeNode(state, pole.id); return; }
   const nw = S.addWire(state, a, from.port.id, pole, into.id, ctx);
   if (nw) nw.style = ui.wireStyle;
+  ui.hint = '';
   ui.wireFrom = { node: pole, port: ports.find((p) => p.id !== into.id) ?? into };
   refreshInspector();
 }

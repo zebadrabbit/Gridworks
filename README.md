@@ -2,7 +2,8 @@
 
 A Satisfactory-themed grid idler in the visual style of Upload Labs: deposits are fixed
 nodes you wire to miners, machines, containers, and power on a neon grid, and watch
-resources flow. Bootstrap power comes from plant deposits feeding a biomass burner (the
+resources flow. Long runs are drawn in one gesture — click a port, pan, and click to drop
+relay poles along the way. Bootstrap power comes from plant deposits feeding a biomass burner (the
 HUB itself has no free power); ship items into the HUB to climb a 7-milestone ladder
 that unlocks buildings and higher belt/pipe marks; splitters and mergers fan wires out
 and back in with per-tick fair-share distribution. The ladder ends at the Space
@@ -68,6 +69,8 @@ Tests also run in CI (GitHub Actions) on every push and pull request.
 
 ## Docs
 
+- `docs/superpowers/specs/2026-07-30-wiring-ergonomics-design.md` — modal wire mode, pole
+  chaining
 - `docs/superpowers/specs/2026-07-30-achievements-design.md` — derived achievement registry,
   HUD chip
 - `docs/superpowers/specs/2026-07-29-bigger-world-design.md` — fog removed, 720×480 map,
