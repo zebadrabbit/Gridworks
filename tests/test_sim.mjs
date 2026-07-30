@@ -768,10 +768,10 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
     // the starter bundle is a hard guarantee — all 7 deposits must land inside START_RADIUS
     // even if rejection sampling had to retry 400 times per deposit. Silent exhaustion would
     // mean rare unplayable maps if this ever regresses (e.g., START_RADIUS shrinks or free()
-    // tightens). Count must be at least START_BUNDLE.length; the general scatter also places
-    // inside START_RADIUS, so the actual count is normally well above 7.
-    assert.ok(inStart.length >= START_BUNDLE.length,
-      `seed ${seed}: starter bundle failed to deliver all 7 deposits: got ${inStart.length} within START_RADIUS, need >= ${START_BUNDLE.length}`);
+    // tightens). Exact count check on the start flag detects any exhaustion.
+    const bundlePlaced = deps.filter((d) => d.start === true).length;
+    assert.equal(bundlePlaced, START_BUNDLE.length,
+      `seed ${seed}: starter bundle placed ${bundlePlaced} deposits, expected exactly ${START_BUNDLE.length}`);
     if (deps.some((d) => d.res === 'nitrogen-gas')) nitrogenSeen++;
   }
   // the regression this fixes: nitrogen-gas is in the JSON (category water, weight 40) and

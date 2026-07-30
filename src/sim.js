@@ -196,10 +196,12 @@ export function genMap(seed, ctx) {
   };
   const free = (x, y) => (Math.abs(HUB_X - x) > 8 || Math.abs(HUB_Y - y) > 8) &&
     deposits.every((d) => Math.abs(d.x - x) > 12 || Math.abs(d.y - y) > 12);
-  const place = (res, cat, x, y) => {
+  const place = (res, cat, x, y, start) => {
     const p = rng();
     const [mult, purity] = p < 0.25 ? PURITIES[0] : p < 0.75 ? PURITIES[1] : PURITIES[2];
-    deposits.push({ id: deposits.length, res, cat, purity, mult, x, y, size: 2 });
+    const d = { id: deposits.length, res, cat, purity, mult, x, y, size: 2 };
+    if (start) d.start = true;
+    deposits.push(d);
   };
   // ponytail: 200 tries, up from 60 — a position can now also be rejected on tier grounds,
   // so rejections are commoner than before. The >= 44 deposit assertion in the tests catches
@@ -238,7 +240,7 @@ export function genMap(seed, ctx) {
       // the constraint on the rounded coordinates, which is where it actually has to hold.
       if (distT(x, y) * MAX_DIST > START_RADIUS) continue;
       if (!free(x, y)) continue;
-      place(res, cat, x, y);
+      place(res, cat, x, y, true);
       break;
     }
   }
