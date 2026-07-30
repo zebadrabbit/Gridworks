@@ -236,132 +236,38 @@ git commit -m "feat(ui): modal wire mode with pole chaining"
 
 ---
 
-### Task 2: Square wire routing
+### Task 2: Documentation
 
-Finishes the feature, so it carries the CHANGELOG and README updates.
+Square routing was cut after playtesting — see the spec — so this task carries only the docs for
+what actually shipped, plus one cosmetic fix the task review deferred here.
 
 **Files:**
-- Modify: `src/game.js` (`wirePath`, the waypoint-handle condition, the `S` key handler)
+- Modify: `src/game.js` (clear a stale hint)
 - Modify: `CHANGELOG.md`, `README.md`
 - Test: browser
 
 **Interfaces:**
-- Consumes: `wire.style`, already persisted and already normalised by `normalizeSave`.
+- Consumes: the modal wire mode and pole chaining from Task 1.
 - Produces: nothing.
 
-- [ ] **Step 1: Add the square branch to `wirePath`**
+- [ ] **Step 1: Clear the stale hint**
 
-In `src/game.js`, `wirePath` currently opens:
+`resolveWireClick` sets `ui.hint = chk.reason ?? ''` when a pole cannot be placed on blocked
+ground, but nothing clears it on a later successful hop. Unlike place mode, where `drawGhost()`
+recomputes the hint every frame, wire mode never recomputes it — so a "blocked" message lingers in
+the HUD until the chain ends.
 
-```js
-function wirePath(p1, p2, w) {
-  if (w?.style === 'straight') return [p1, ...w.pts, p2];
-```
+Add `ui.hint = '';` as the first statement of both success paths in `resolveWireClick`: in the
+completed-wire branch before `setMode('idle')`, and in the pole branch before the
+`ui.wireFrom = ...` reassignment.
 
-Change it to:
+- [ ] **Step 2: Run the tests**
 
-```js
-function wirePath(p1, p2, w) {
-  if (w?.style === 'straight') return [p1, ...w.pts, p2];
-  if (w?.style === 'square') {
-    // Z-route each leg: out horizontally to the midpoint, across vertically, then in again.
-    // Ports sit on E/W faces, so leading with horizontal leaves the wire square to the building.
-    const legs = [p1, ...(w.pts ?? []), p2];
-    const out = [legs[0]];
-    for (let i = 1; i < legs.length; i++) {
-      const a = legs[i - 1], b = legs[i];
-      const mx = (a.x + b.x) / 2;
-      out.push({ x: mx, y: a.y }, { x: mx, y: b.y }, b);
-    }
-    return out;
-  }
-```
+Run: `./manage.sh test`
+Expected: PASS — `all sim checks passed`. This is a regression guard only; the change is in
+`game.js`, which has no test suite by design.
 
-`distToPath` already walks arbitrary polylines, so hit-testing, waypoint dragging and the marching-ants animation all work with no further change.
-
-- [ ] **Step 2: Show waypoint handles for square wires too**
-
-Square routing uses `w.pts` exactly as straight does, so its waypoints must be draggable. In `drawWire`, change:
-
-```js
-  if (selected && w.style === 'straight') {
-```
-
-to:
-
-```js
-  if (selected && w.style !== 'noodle') {
-```
-
-Also in `handleAt`, change:
-
-```js
-  if (!w || w.style !== 'straight') return null;
-```
-
-to:
-
-```js
-  if (!w || w.style === 'noodle') return null;
-```
-
-and in the `dblclick` handler that inserts a waypoint, change:
-
-```js
-  if (!wire || wire.style !== 'straight') return;
-```
-
-to:
-
-```js
-  if (!wire || wire.style === 'noodle') return;
-```
-
-- [ ] **Step 3: Make `S` a three-way cycle**
-
-In the keydown handler, replace:
-
-```js
-      if (w) { w.style = w.style === 'straight' ? 'noodle' : 'straight'; select({ type: 'wire', id: w.id }); }
-    } else {
-      ui.wireStyle = ui.wireStyle === 'straight' ? 'noodle' : 'straight';
-      ui.hint = `new wires: ${ui.wireStyle} · S to toggle`;
-```
-
-with:
-
-```js
-      if (w) { w.style = nextStyle(w.style); select({ type: 'wire', id: w.id }); }
-    } else {
-      ui.wireStyle = nextStyle(ui.wireStyle);
-      ui.hint = `new wires: ${ui.wireStyle} · S to cycle`;
-```
-
-and add above the keydown handler:
-
-```js
-const STYLES = ['noodle', 'straight', 'square'];
-const nextStyle = (s) => STYLES[(STYLES.indexOf(s) + 1) % STYLES.length];
-```
-
-For an unrecognised style `indexOf` returns `-1`, so `nextStyle` yields index `0` — `'noodle'`, the default. That is the right fallback for a corrupt value.
-
-- [ ] **Step 4: Verify in the browser**
-
-Run: `./manage.sh start` then open `http://localhost:8889`
-
-Check:
-1. With nothing selected, press `S` repeatedly — the hint cycles noodle → straight → square → noodle.
-2. Draw a wire in square mode. It runs horizontally, turns, runs vertically, turns, and arrives horizontally.
-3. Select an existing noodle wire and press `S` twice — it becomes square without losing its endpoints.
-4. Double-click a square wire to insert a waypoint, then drag the handle. The route re-squares around it.
-5. Marching ants animate along a square wire when goods flow.
-6. Click precisely on a square wire's vertical segment to select it — hit-testing follows the drawn path, not a straight line between endpoints.
-7. Save, reload. Square wires are still square.
-
-Then: `./manage.sh stop`
-
-- [ ] **Step 5: Update the CHANGELOG**
+- [ ] **Step 3: Update the CHANGELOG**
 
 Insert directly below the `# Changelog` heading in `CHANGELOG.md`:
 
@@ -377,33 +283,45 @@ Insert directly below the `# Changelog` heading in `CHANGELOG.md`:
 - **Panning works mid-wire**, which is what makes cross-map runs possible at all. It needed no new
   input handling: `mousedown` already checked for a pan drag before checking for a port, and the
   old press-hold gesture was the only thing preventing it.
-- **Square wire routing** joins noodle and straight as a third style, cycled with `S`. Waypoints
-  work for square wires exactly as they do for straight ones.
-- Tests: the wire-kind→pole-kind mapping is total and every pole carries its kind on both ports;
-  a two-pole item chain conserves goods end to end; a two-pole power chain reaches a distant miner.
+- Tests: the wire-kind to pole-kind mapping is total and every pole carries its kind on both
+  ports; a two-pole item chain conserves goods end to end; a two-pole power chain reaches a
+  distant miner.
 ```
 
-- [ ] **Step 6: Update the README**
+Do **not** mention square routing — it was cut before implementation and no `'square'` style
+exists.
+
+- [ ] **Step 4: Update the README**
 
 Read `README.md`. In the opening paragraph, find the sentence describing wiring and add after it:
 
 ```
 Long runs are drawn in one gesture — click a port, pan, and click to drop relay poles along the
-way — and wires can be routed as noodles, straight lines, or square.
+way.
 ```
 
 Then in the `## Docs` list, insert directly above the `2026-07-30-achievements-design.md` entry:
 
 ```
 - `docs/superpowers/specs/2026-07-30-wiring-ergonomics-design.md` — modal wire mode, pole
-  chaining, square routing
+  chaining
 ```
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 5: Verify in the browser**
+
+Run: `./manage.sh start` then open `http://localhost:8889`
+
+Check: start a chain, click on top of an existing building so the hint reads a blocked reason,
+then click open ground to place a pole successfully. The hint must clear rather than keep showing
+the stale message.
+
+Then: `./manage.sh stop`
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/game.js CHANGELOG.md README.md
-git commit -m "feat(ui): square wire routing"
+git commit -m "docs: wiring ergonomics changelog and readme"
 ```
 
 ---
@@ -411,5 +329,5 @@ git commit -m "feat(ui): square wire routing"
 ## Done when
 
 - `./manage.sh test` passes.
-- Every browser check in both tasks has been performed against a running dev server — checks 1, 4 and 10 of Task 1 especially, since they cover the regressions the modal change could cause.
+- Every browser check in both tasks has been performed against a running dev server — checks 1, 4, 10 and 11 of Task 1 especially, since they cover the regressions the modal change could cause.
 - `git status` is clean.

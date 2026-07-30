@@ -71,13 +71,19 @@ This is the whole reason the modal change is worth its blast radius. No edge-pan
 panning, no new input mechanic — the capability is already in the code and the old gesture was the
 only thing preventing it.
 
-## Square routing
+## Square routing — cut after playtesting
 
-`wire.style` is already persisted and already carries `'straight'` and `'noodle'`. A third value,
-`'square'`, emits axis-aligned segments between each pair of points.
+Originally scoped here: a third `wire.style` value emitting axis-aligned segments, cycled with
+`S`. It was cheap — `distToPath` already walks arbitrary polylines, so hit-testing and waypoints
+needed no changes — but after playing with pole chaining the user judged it unnecessary and
+deferred it.
 
-`distToPath` already handles arbitrary polylines, so hit-testing and the waypoint machinery need
-no changes at all. The `S` key currently toggles between two styles and becomes a three-way cycle.
+Worth recording *why* that is a reasonable call rather than a whim: chaining poles already
+produces the readable, deliberate layouts square routing was meant to give. A run built from
+placed poles is a sequence of short segments the player chose, which is most of what orthogonal
+routing was for. The two features overlap more than they looked like they would on paper.
+
+Deferred rather than rejected — the implementation notes above remain accurate if it returns.
 
 ## Testing
 
