@@ -102,6 +102,54 @@ export function earned(state) {
   return ACHIEVEMENTS.filter((a) => a.test(state)).map((a) => a.id);
 }
 
+// ------------------------------------------------------------------ onboarding
+
+// Goals are OUTCOMES, not scripted actions, because node `status` already encodes whole
+// dependency chains — a miner reporting 'mining' proves it is both wired to a deposit and
+// powered. That makes each step one predicate, never dictates how the player gets there, and
+// cannot wedge if they build in a different order. Progress is derived like ACHIEVEMENTS:
+// the current step is simply the first unsatisfied one, so nothing is stored in the save.
+const has = (s, key, status) =>
+  (s.nodes ?? []).some((n) => n.key === key && n.status === status);
+
+export const TUTORIAL = [
+  {
+    id: 'power',
+    goal: 'Get power flowing',
+    hint: 'Nothing runs without power. Find a plant deposit, belt it into a Biomass Burner, and it will start generating.',
+    test: (s) => (s.nodes ?? []).some((n) => n.status === 'generating'),
+  },
+  {
+    id: 'mine',
+    goal: 'Mine some iron ore',
+    hint: 'Place a Miner near an iron deposit, wire the deposit to the miner\'s resource port, then run a power line to it.',
+    test: (s) => (s.nodes ?? []).some((n) => n.status === 'mining'),
+  },
+  {
+    id: 'smelt',
+    goal: 'Smelt the ore into ingots',
+    hint: 'Place a Smelter, select it, and choose Iron Ingot in the Recipe dropdown on the right. Belt ore in, and give it power.',
+    test: (s) => has(s, 'smelter', 'crafting'),
+  },
+  {
+    id: 'craft',
+    goal: 'Craft a part',
+    hint: 'Place a Constructor, pick a recipe such as Iron Plate, and belt ingots into it from the smelter.',
+    test: (s) => has(s, 'constructor', 'crafting'),
+  },
+  {
+    id: 'ship',
+    goal: 'Ship it to the HUB',
+    hint: 'Belt the finished parts into the HUB. Shipping is what completes milestones and unlocks new buildings.',
+    test: (s) => Object.values(s.shipped ?? {}).some((v) => v > 0),
+  },
+];
+
+// the first unsatisfied goal, or null once the first factory is complete
+export function tutorialStep(state) {
+  return TUTORIAL.find((t) => !t.test(state)) ?? null;
+}
+
 export function validateMilestones(ctx) {
   for (const m of MILESTONES) {
     for (const res of Object.keys(m.cost)) if (!ctx.names[res]) throw new Error(`milestone ${m.name}: unknown item ${res}`);

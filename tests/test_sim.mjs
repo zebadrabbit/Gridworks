@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H, ACHIEVEMENTS, earned } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H, ACHIEVEMENTS, earned, TUTORIAL, tutorialStep } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -1046,6 +1046,83 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.ok(addWire(ps, q2, 'out0', m, 'pin', ctx));
   tick(ps, 0.1, ctx);
   assert.equal(m.status, 'mining', 'power reaches the miner through a two-pole chain');
+}
+
+// onboarding: five outcome-based goals, derived from the factory rather than stored
+{
+  assert.equal(TUTORIAL.length, 5, 'five goals: power, mine, smelt, craft, ship');
+  assert.equal(new Set(TUTORIAL.map((t) => t.id)).size, TUTORIAL.length, 'ids are unique');
+  for (const t of TUTORIAL) {
+    assert.ok(t.id && t.goal && t.hint, `${t.id} has id, goal and hint`);
+    assert.equal(typeof t.test, 'function', `${t.id} has a predicate`);
+  }
+
+  // a fresh game is on the first step
+  const fresh = newGame(91, ctx);
+  assert.equal(tutorialStep(fresh)?.id, TUTORIAL[0].id, 'a new game starts at the first goal');
+
+  // each predicate is satisfied by a state built for it, and not by an empty one
+  const empty = { nodes: [], shipped: {} };
+  for (const t of TUTORIAL) {
+    assert.equal(t.test(empty), false, `${t.id} is not satisfied by an empty world`);
+  }
+  assert.ok(TUTORIAL[0].test({ nodes: [{ key: 'biomass-burner', status: 'generating' }], shipped: {} }),
+    'step 1 passes on a generating generator');
+  assert.ok(TUTORIAL[1].test({ nodes: [{ key: 'miner-mk1', status: 'mining' }], shipped: {} }),
+    'step 2 passes on a mining miner');
+  assert.ok(TUTORIAL[2].test({ nodes: [{ key: 'smelter', status: 'crafting' }], shipped: {} }),
+    'step 3 passes on a crafting smelter');
+  assert.ok(TUTORIAL[3].test({ nodes: [{ key: 'constructor', status: 'crafting' }], shipped: {} }),
+    'step 4 passes on a crafting constructor');
+  assert.ok(TUTORIAL[4].test({ nodes: [], shipped: { 'iron-plate': 3 } }),
+    'step 5 passes once something has shipped');
+
+  // a crafting smelter must not satisfy the constructor step, and vice versa
+  assert.equal(TUTORIAL[3].test({ nodes: [{ key: 'smelter', status: 'crafting' }], shipped: {} }), false,
+    'step 4 is specific to the constructor');
+  assert.equal(TUTORIAL[2].test({ nodes: [{ key: 'constructor', status: 'crafting' }], shipped: {} }), false,
+    'step 3 is specific to the smelter');
+  // a zero entry in shipped must not count
+  assert.equal(TUTORIAL[4].test({ nodes: [], shipped: { 'iron-plate': 0 } }), false,
+    'a zero shipped entry does not satisfy step 5');
+
+  // fully built: every step passes and there is nothing left to do
+  const done = {
+    nodes: [
+      { key: 'biomass-burner', status: 'generating' },
+      { key: 'miner-mk1', status: 'mining' },
+      { key: 'smelter', status: 'crafting' },
+      { key: 'constructor', status: 'crafting' },
+    ],
+    shipped: { 'iron-plate': 12 },
+  };
+  assert.equal(tutorialStep(done), null, 'a finished first factory has no remaining goal');
+
+  // the sequence is causal, not arbitrary: a real build satisfies the steps in order
+  const s = newGame(93, ctx);
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const hub = s.nodes[0];
+  const plant = addDeposit(s, 'leaves', 'plant', 'normal', 1, 5, 20);
+  const dep = addDeposit(s, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const burner = addNode(s, 'biomass-burner', 10, 20, ctx);
+  burner.buf.wood = 200;
+  addWire(s, plant, 'out0', burner, 'in0', ctx);
+  tick(s, 0.1, ctx);
+  assert.equal(tutorialStep(s)?.id, TUTORIAL[1].id, 'power done, now on the mining goal');
+
+  const miner = addNode(s, 'miner-mk1', 10, 5, ctx);
+  addWire(s, dep, 'out0', miner, 'res0', ctx);
+  addWire(s, burner, 'pout', miner, 'pin', ctx);
+  tick(s, 0.1, ctx);
+  assert.equal(tutorialStep(s)?.id, TUTORIAL[2].id, 'mining done, now on the smelting goal');
+
+  const sm = addNode(s, 'smelter', 16, 5, ctx);
+  setRecipe(s, sm, 'iron-ingot', ctx);
+  addWire(s, miner, 'out0', sm, 'in0', ctx);
+  addWire(s, burner, 'pout', sm, 'pin', ctx);
+  for (let i = 0; i < 100; i++) tick(s, 0.1, ctx);
+  assert.equal(tutorialStep(s)?.id, TUTORIAL[3].id, 'smelting done, now on the crafting goal');
 }
 
 console.log('all sim checks passed');
