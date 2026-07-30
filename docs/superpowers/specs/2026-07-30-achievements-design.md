@@ -84,9 +84,14 @@ achievements panel anchors to its own, so both being open at once would overlap 
 the screen. Opening either closes the other. This is one line in each toggle handler and avoids
 a layout collision rather than trying to lay two panels out side by side.
 
-Locked achievements show their description rather than being hidden or vague. The milestone
-ladder is already fully visible in the bottom-left milestone panel, so concealing achievement
-text would be false mystery about information the player can already read.
+Locked achievements show their description rather than being hidden or vague. For the milestone
+half, that information is already readable elsewhere: every milestone grants at least one
+building, and the palette labels each locked building with the milestone that unlocks it, so all
+seven names are visible ahead of time — concealing them in the achievements panel would be false
+mystery. The elevator half has no such precedent: phase names appear in the UI only for the
+current phase, and only once a Space Elevator exists, so the achievements panel is the first and
+only place a new player can read `Platform / Construction / Systems / Assembly`, including the
+win. That reveal is accepted rather than avoided — the README already states four phases to win.
 
 ## The seeding gotcha
 

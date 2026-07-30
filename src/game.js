@@ -811,6 +811,10 @@ function refreshAchievements() {
   for (const id of got) {
     if (seen.has(id)) continue;
     seen.add(id);
+    // Elevator-phase achievements duplicate frame()'s own phase-complete toast (and the win
+    // duplicates its "you win!" toast) — considered and kept: now that toasts stack instead of
+    // overlapping, both are legible, frame()'s toast fires first and carries the detail, and
+    // suppressing just this category would make it silently different from the other seven.
     toast(`🏆 ${S.ACHIEVEMENTS.find((a) => a.id === id).name}`);
   }
   if (!box.classList.contains('open')) return;
@@ -861,17 +865,28 @@ const fmtDur = (s) => {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
+// Stack rather than overlap: toasts genuinely coincide — an elevator phase completing fires
+// both frame()'s phase toast and the achievement toast for the same event, and the welcome-back
+// toast can land alongside an offline earn. Position by document order and re-index on removal,
+// not by a live count: counting hands a new toast an occupied slot whenever an earlier toast
+// has expired while a later one survives. Heights are measured because a long toast wraps to
+// two lines on a narrow window, which a fixed pitch would overlap.
+const reflowToasts = () => {
+  let y = 56;
+  for (const t of document.querySelectorAll('.toast')) {
+    t.style.top = y + 'px';
+    y += t.offsetHeight + 8;
+  }
+};
+
 function toast(msg) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = msg;
-  // stack instead of overlapping: toasts genuinely coincide — an elevator phase completing
-  // fires both frame()'s phase toast and this feature's achievement toast for the same event,
-  // and the welcome-back toast can land alongside an offline earn
-  el.style.top = (56 + document.querySelectorAll('.toast').length * 44) + 'px';
   document.body.appendChild(el);
+  reflowToasts();
   setTimeout(() => el.classList.add('fade'), 7000);
-  setTimeout(() => el.remove(), 8000);
+  setTimeout(() => { el.remove(); reflowToasts(); }, 8000);
 }
 
 async function main() {
@@ -991,6 +1006,7 @@ async function main() {
   setInterval(refreshAlerts, 400);
   setInterval(refreshAchievements, 400);
   updateMilestonePanel();
+  refreshAchievements();
 
   let last = performance.now(), acc = 0, lastMs = -1, lastPhase = state.elevator?.phase ?? 0;
   const STEP = 0.1;

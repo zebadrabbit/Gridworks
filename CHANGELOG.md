@@ -13,6 +13,11 @@
   ones dimmed with their description. Newly earned ones toast. The chip is always visible, since
   it is a progress counter rather than a problem count, and it shares the alert panel's styling;
   opening either panel closes the other.
+- **Toasts now stack instead of overlapping.** Achievements made coincident toasts routine — an
+  elevator phase completing fires both the existing phase toast and a new achievement toast, and
+  a welcome-back toast can land alongside an offline earn — and every toast in the app used to
+  render at the same fixed position, so any second toast landed exactly on top of the first.
+  They're now positioned in document order by measured height and re-indexed on removal.
 - Tests: registry length tracks the two ladders, ids unique, every entry well-formed, a fresh
   game earns nothing, a mid-run state earns exactly its prefix, a finished run earns everything,
   the earned set is monotonic as either counter rises, and it survives a save round-trip

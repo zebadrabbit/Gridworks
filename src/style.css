@@ -97,4 +97,3 @@ aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
 #achievements .ach.locked { color: #5b6b80; }
 #achievements .ach small { display: block; color: #5b6b80; font-size: 11px; }
 #achievements .ach.locked small { color: #46536b; }
-
