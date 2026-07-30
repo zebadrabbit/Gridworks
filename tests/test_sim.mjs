@@ -1066,21 +1066,21 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   for (const t of TUTORIAL) {
     assert.equal(t.test(empty), false, `${t.id} is not satisfied by an empty world`);
   }
-  assert.ok(TUTORIAL[0].test({ nodes: [{ key: 'biomass-burner', status: 'generating' }], shipped: {} }),
-    'step 1 passes on a generating generator');
-  assert.ok(TUTORIAL[1].test({ nodes: [{ key: 'miner-mk1', status: 'mining' }], shipped: {} }),
-    'step 2 passes on a mining miner');
-  assert.ok(TUTORIAL[2].test({ nodes: [{ key: 'smelter', status: 'crafting' }], shipped: {} }),
-    'step 3 passes on a crafting smelter');
-  assert.ok(TUTORIAL[3].test({ nodes: [{ key: 'constructor', status: 'crafting' }], shipped: {} }),
-    'step 4 passes on a crafting constructor');
+  assert.ok(TUTORIAL[0].test({ nodes: [{ key: 'biomass-burner', tGreen: 1 }], shipped: {} }),
+    'step 1 passes on a biomass-burner that has run');
+  assert.ok(TUTORIAL[1].test({ nodes: [{ key: 'miner-mk1', made: 1 }], shipped: {} }),
+    'step 2 passes on a miner that has produced');
+  assert.ok(TUTORIAL[2].test({ nodes: [{ key: 'smelter', made: 1 }], shipped: {} }),
+    'step 3 passes on a smelter that has produced');
+  assert.ok(TUTORIAL[3].test({ nodes: [{ key: 'constructor', made: 1 }], shipped: {} }),
+    'step 4 passes on a constructor that has produced');
   assert.ok(TUTORIAL[4].test({ nodes: [], shipped: { 'iron-plate': 3 } }),
     'step 5 passes once something has shipped');
 
-  // a crafting smelter must not satisfy the constructor step, and vice versa
-  assert.equal(TUTORIAL[3].test({ nodes: [{ key: 'smelter', status: 'crafting' }], shipped: {} }), false,
+  // a smelter producing must not satisfy the constructor step, and vice versa
+  assert.equal(TUTORIAL[3].test({ nodes: [{ key: 'smelter', made: 1 }], shipped: {} }), false,
     'step 4 is specific to the constructor');
-  assert.equal(TUTORIAL[2].test({ nodes: [{ key: 'constructor', status: 'crafting' }], shipped: {} }), false,
+  assert.equal(TUTORIAL[2].test({ nodes: [{ key: 'constructor', made: 1 }], shipped: {} }), false,
     'step 3 is specific to the smelter');
   // a zero entry in shipped must not count
   assert.equal(TUTORIAL[4].test({ nodes: [], shipped: { 'iron-plate': 0 } }), false,
@@ -1089,10 +1089,10 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   // fully built: every step passes and there is nothing left to do
   const done = {
     nodes: [
-      { key: 'biomass-burner', status: 'generating' },
-      { key: 'miner-mk1', status: 'mining' },
-      { key: 'smelter', status: 'crafting' },
-      { key: 'constructor', status: 'crafting' },
+      { key: 'biomass-burner', tGreen: 10 },
+      { key: 'miner-mk1', made: 5 },
+      { key: 'smelter', made: 3 },
+      { key: 'constructor', made: 2 },
     ],
     shipped: { 'iron-plate': 12 },
   };
@@ -1123,6 +1123,36 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   addWire(s, burner, 'pout', sm, 'pin', ctx);
   for (let i = 0; i < 100; i++) tick(s, 0.1, ctx);
   assert.equal(tutorialStep(s)?.id, TUTORIAL[3].id, 'smelting done, now on the crafting goal');
+
+  // Regression test: pure deposits saturate, causing status to regress to 'output full'.
+  // Counters must not regress; tutorial progress must advance monotonically.
+  // A pure (mult: 2) deposit on a starting-tier belt (60/min) saturates the miner output
+  // and flips it to 'output full'. Without counters, tutorialStep would regress to 'mine'.
+  const s2 = newGame(94, ctx);
+  s2.unlocked.buildings = Object.keys(ctx.catalog);
+  s2.nodes = s2.nodes.filter((n) => n.key === 'the-hub'); s2.wires = [];
+  const plant2 = addDeposit(s2, 'leaves', 'plant', 'normal', 1, 5, 20);
+  const pureDep = addDeposit(s2, 'iron-ore', 'mineral', 'pure', 2, 5, 5); // pure: mult 2
+  const burner2 = addNode(s2, 'biomass-burner', 10, 20, ctx);
+  burner2.buf.wood = 500;
+  addWire(s2, plant2, 'out0', burner2, 'in0', ctx);
+  tick(s2, 0.1, ctx);
+
+  const miner2 = addNode(s2, 'miner-mk1', 10, 5, ctx);
+  addWire(s2, pureDep, 'out0', miner2, 'res0', ctx);
+  addWire(s2, burner2, 'pout', miner2, 'pin', ctx);
+  tick(s2, 0.1, ctx);
+
+  const sm2 = addNode(s2, 'smelter', 16, 5, ctx);
+  setRecipe(s2, sm2, 'iron-ingot', ctx);
+  addWire(s2, miner2, 'out0', sm2, 'in0', ctx);
+  addWire(s2, burner2, 'pout', sm2, 'pin', ctx);
+  for (let i = 0; i < 2200; i++) tick(s2, 0.1, ctx); // tick until miner saturates
+
+  assert.equal(miner2.status, 'output full', 'pure deposit causes miner to saturate and flip to output full');
+  // Even though miner status has regressed, tutorialStep must not regress—it uses counters
+  const currentStep = tutorialStep(s2);
+  assert.ok(!currentStep || currentStep.id !== TUTORIAL[1].id, 'tutorial progress does not regress to mining despite status regression');
 }
 
 console.log('all sim checks passed');

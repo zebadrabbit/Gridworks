@@ -104,38 +104,42 @@ export function earned(state) {
 
 // ------------------------------------------------------------------ onboarding
 
-// Goals are OUTCOMES, not scripted actions, because node `status` already encodes whole
-// dependency chains — a miner reporting 'mining' proves it is both wired to a deposit and
-// powered. That makes each step one predicate, never dictates how the player gets there, and
-// cannot wedge if they build in a different order. Progress is derived like ACHIEVEMENTS:
-// the current step is simply the first unsatisfied one, so nothing is stored in the save.
-const has = (s, key, status) =>
-  (s.nodes ?? []).some((n) => n.key === key && n.status === status);
+// Goals are OUTCOMES, not scripted actions. Each step is a single test predicate that
+// verifies a real factory milestone. Progress is derived like ACHIEVEMENTS — the current
+// step is simply the first unsatisfied one, so nothing is stored in the save.
+//
+// Predicates use monotonic counters (node.made, node.tGreen) rather than transient
+// node.status because status regresses under backpressure. A miner on a pure deposit
+// (mult: 2) saturates a starting-tier belt and flips to 'output full', falsely
+// signalling that mining is no longer working. Counters only ever increase and survive
+// backpressure, so tutorial progress never regresses.
 
 export const TUTORIAL = [
   {
     id: 'power',
     goal: 'Get power flowing',
     hint: 'Nothing runs without power. Find a plant deposit, belt it into a Biomass Burner, and it will start generating.',
-    test: (s) => (s.nodes ?? []).some((n) => n.status === 'generating'),
+    // Biomass Burner is the only generator in START_UNLOCKED; all others gate behind
+    // milestones that require shipping (step 5). So checking key is safe and specific.
+    test: (s) => (s.nodes ?? []).some((n) => n.key === 'biomass-burner' && (n.tGreen ?? 0) > 0),
   },
   {
     id: 'mine',
     goal: 'Mine some iron ore',
     hint: 'Place a Miner near an iron deposit, wire the deposit to the miner\'s resource port, then run a power line to it.',
-    test: (s) => (s.nodes ?? []).some((n) => n.status === 'mining'),
+    test: (s) => (s.nodes ?? []).some((n) => n.key.startsWith('miner-') && (n.made ?? 0) > 0),
   },
   {
     id: 'smelt',
     goal: 'Smelt the ore into ingots',
     hint: 'Place a Smelter, select it, and choose Iron Ingot in the Recipe dropdown on the right. Belt ore in, and give it power.',
-    test: (s) => has(s, 'smelter', 'crafting'),
+    test: (s) => (s.nodes ?? []).some((n) => n.key === 'smelter' && (n.made ?? 0) > 0),
   },
   {
     id: 'craft',
     goal: 'Craft a part',
     hint: 'Place a Constructor, pick a recipe such as Iron Plate, and belt ingots into it from the smelter.',
-    test: (s) => has(s, 'constructor', 'crafting'),
+    test: (s) => (s.nodes ?? []).some((n) => n.key === 'constructor' && (n.made ?? 0) > 0),
   },
   {
     id: 'ship',
