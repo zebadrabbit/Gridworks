@@ -12,7 +12,8 @@ status lights red/yellow/green, a `⚠ N` HUD chip lists what needs attention an
 pans the camera there on click, and the inspector tracks each machine's lifetime
 uptime and production. Ore is tiered by distance from the HUB — iron and limestone
 at your feet, uranium 260 tiles out — with a guaranteed playable start, and a minimap docked in
-the inspector tracks your factory's health across a 720×480 world.
+the inspector tracks your factory's health across a 720×480 world. Existing saves keep the
+map they were generated on; use "New Map" to regenerate at the current world size.
 
 `data/source/satisfactory_data.json` is the immutable source of truth for all items,
 buildings, recipes, and resource weights (see `docs/SOURCE_OF_TRUTH.md`).

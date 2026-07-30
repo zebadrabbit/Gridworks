@@ -7,6 +7,10 @@ const SAVE_KEY = 'gridworks-save-v2';
 // New Map and save import, which anything stored inside the save would not
 const MAP_KEY = 'gridworks-minimap';
 let mapOpen = localStorage.getItem(MAP_KEY) !== '0';
+// Applied at module scope, not only inside main()'s syncMap(), so a collapsed map is correct
+// on the very first paint — main() awaits a fetch before it gets to syncMap(), which would
+// otherwise flash the map open for a frame on every load (the fog toggle had this same bug).
+document.getElementById('inspector-map')?.classList.toggle('collapsed', !mapOpen);
 const KIND_COLOR = { item: '#58d68d', fluid: '#5dade2', power: '#f4d03f', resource: '#e17055' };
 const TYPE_COLOR = {
   miner: '#f5a623', machine: '#4dd8ff', store: '#a29bfe',
@@ -53,6 +57,9 @@ function portPos(node, port) {
 }
 
 function portAt(wx, wy) {
+  // Below this zoom, ports on adjacent sides sit closer together on screen than the 9px hit
+  // threshold below, so hits stop being distinguishable and a click means "pan", not "wire".
+  if (cam.z < 0.25) return null;
   for (const node of state.nodes) {
     for (const port of S.portsOf(node, ctx)) {
       const p = portPos(node, port);
@@ -151,17 +158,23 @@ function draw(now) {
 }
 
 function drawGrid() {
-  const tl = toWorld(0, 0), br = toWorld(canvas.width, canvas.height);
-  const x0 = Math.max(0, Math.floor(tl.x / T)), x1 = Math.min(S.WORLD_W, Math.ceil(br.x / T));
-  const y0 = Math.max(0, Math.floor(tl.y / T)), y1 = Math.min(S.WORLD_H, Math.ceil(br.y / T));
-  for (let gx = x0; gx <= x1; gx++) {
-    cx.strokeStyle = gx % 8 === 0 ? 'rgba(77,216,255,0.10)' : 'rgba(77,216,255,0.04)';
-    cx.lineWidth = 1 / cam.z;
-    cx.beginPath(); cx.moveTo(gx * T, y0 * T); cx.lineTo(gx * T, y1 * T); cx.stroke();
-  }
-  for (let gy = y0; gy <= y1; gy++) {
-    cx.strokeStyle = gy % 8 === 0 ? 'rgba(77,216,255,0.10)' : 'rgba(77,216,255,0.04)';
-    cx.beginPath(); cx.moveTo(x0 * T, gy * T); cx.lineTo(x1 * T, gy * T); cx.stroke();
+  // Below this zoom the lines sit closer together (2.56px apart at the 0.08 floor) than the
+  // 1px stroke width, so upwards of a thousand stroke() calls paint ~39% of the screen and it
+  // reads as a flat wash, not a grid. Skip the lines; the world-border strokeRect below still
+  // shows the map's extent.
+  if (cam.z >= 0.15) {
+    const tl = toWorld(0, 0), br = toWorld(canvas.width, canvas.height);
+    const x0 = Math.max(0, Math.floor(tl.x / T)), x1 = Math.min(S.WORLD_W, Math.ceil(br.x / T));
+    const y0 = Math.max(0, Math.floor(tl.y / T)), y1 = Math.min(S.WORLD_H, Math.ceil(br.y / T));
+    for (let gx = x0; gx <= x1; gx++) {
+      cx.strokeStyle = gx % 8 === 0 ? 'rgba(77,216,255,0.10)' : 'rgba(77,216,255,0.04)';
+      cx.lineWidth = 1 / cam.z;
+      cx.beginPath(); cx.moveTo(gx * T, y0 * T); cx.lineTo(gx * T, y1 * T); cx.stroke();
+    }
+    for (let gy = y0; gy <= y1; gy++) {
+      cx.strokeStyle = gy % 8 === 0 ? 'rgba(77,216,255,0.10)' : 'rgba(77,216,255,0.04)';
+      cx.beginPath(); cx.moveTo(x0 * T, gy * T); cx.lineTo(x1 * T, gy * T); cx.stroke();
+    }
   }
   cx.strokeStyle = 'rgba(77,216,255,0.35)';
   cx.lineWidth = 2 / cam.z;
@@ -354,9 +367,9 @@ addEventListener('mouseup', () => { mmDrag = false; });
 
 // Colouring dots by status costs building identity; hovering buys it back. Reuses the
 // existing #tooltip element rather than adding a second tooltip system.
-// Nearest-dot within 5px, not containment: at 0.75px/tile even the 4-tile HUB is 3px, so
-// containment would make most dots unhittable. Ties go to the worst light, matching the
-// worst-last draw order — in a cluster you want to hear about the broken one.
+// Nearest-dot within 5px, not containment: at ~0.32px/tile (MM_SCALE) even the 4-tile HUB is
+// ~1.27px, so containment would make most dots unhittable. Ties go to the worst light, matching
+// the worst-last draw order — in a cluster you want to hear about the broken one.
 const LIGHT_RANK = { red: 3, yellow: 2, green: 1 };
 function mmHover(e) {
   const w = mmToWorld(e);

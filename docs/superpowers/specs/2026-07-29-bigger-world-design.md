@@ -79,7 +79,7 @@ Measured over 300 seeds per size:
 | tiles per deposit | 800 | 7,200 |
 | nearest-neighbour spacing, median | 17 | 30 |
 | nearest-neighbour spacing, p90 | 26 | 81 |
-| hub → nearest non-starter deposit, median | 19 | 37 |
+| hub → nearest non-starter deposit, median | 19 | 34.4 |
 | deposits within `START_RADIUS` | 13.2 | 8.0 |
 | uranium hard-floor distance | 87 | 260 |
 
@@ -88,7 +88,7 @@ measurements say otherwise, and the reason is the tiering: each tier concentrate
 band rather than spreading uniformly, so the inner area stays reasonably dense — median spacing
 widens only 1.8× — while the frontier genuinely opens up, with the p90 tripling. That is the
 curve originally asked for: iron underfoot, uranium 260 tiles out. The nearest non-starter
-deposit sits 37 tiles away, so there is no cliff after the guaranteed bundle.
+deposit sits 34.4 tiles away, so there is no cliff after the guaranteed bundle.
 
 `START_RADIUS` stays 40. It still defines the guaranteed-start band, and holding it constant
 while the map grows is what keeps the opening tight.

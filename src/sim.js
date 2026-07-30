@@ -177,12 +177,15 @@ export function tierFactor(res, t) {
 }
 // Candidate positions each scattered deposit chooses between, and the score floor an
 // out-of-band candidate keeps (see scatter). The floor is what holds the deposit count up:
-// at 720x480, tier 0's disc has 9x its former area, so the shortfall this covers is far
-// smaller than it was at 240x160 (was: 3,000 seeds, mean 42.2, worst case 36) — but it has
-// not gone to zero. Measured over 50,000 seeds at the current world size, POS_FLOOR = 0 still
-// drops the mean map from 48 deposits to 47.99 with a worst case of 46 (seed 116353), because
-// tier 0 wants ~24 deposits and can still occasionally run out of in-band room. Any value
-// above 0 fixes that; smaller is sharper tiering.
+// at 720x480, tier 0's disc has 9x its former area (radius ~151 tiles, room for ~115 deposits
+// under free()'s spacing rule, against ~24 wanted per map), so the shortfall this covers is
+// far smaller than it was at 240x160 (was: 3,000 seeds, mean 42.2, worst case 36) — but not
+// zero. The residual is candidate exhaustion, not lack of room: all 40 POS_TRIES candidates
+// land out-of-band or non-free. Measured over seeds 1-50,000 at POS_FLOOR = 0: 425 maps
+// (0.85%) fall below 48 deposits, worst case 46 at seed 11508 (mean 47.99); reproduced over
+// the disjoint range 100,001-120,000 (181 below 48, worst case 46 at seed 116353). Any
+// POS_FLOOR above 0 fixes it; smaller is sharper tiering. Raising POS_TRIES instead would let
+// this tuned constant go.
 const POS_TRIES = 40;
 const POS_FLOOR = 0.005;
 
@@ -228,9 +231,10 @@ export function genMap(seed, ctx) {
   // have to cope with tier 0's band straddling t=0. Scoring uniform candidates has none of
   // those failure modes and cannot land off-map.
   //
-  // POS_FLOOR keeps every free candidate in the running, so a band with no room left degrades
-  // to "the best spot still available" rather than dropping the deposit. Tier 0 needs that: it
-  // wants ~24 deposits per map and its disc only fits ~15.
+  // POS_FLOOR keeps every free candidate in the running, so a run of bad luck degrades to "the
+  // best spot still available" rather than dropping the deposit outright. See the POS_FLOOR
+  // comment above for why this is still occasionally needed (candidate exhaustion) and how
+  // often (measured rate).
   // `fixedRes` is for categories with no entry in data.resources (only `plant`, whose
   // `leaves` is an item).
   const scatter = (count, cat, fixedRes) => {

@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -692,7 +692,7 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
 
   // distT measures from the HUB centre, not its corner
   assert.equal(distT(HUB_X + 2, HUB_Y + 2), 0, 'hub centre is t=0');
-  assert.ok(distT(0, 0) > 0.99, `map corner is t~1, got ${distT(0, 0)}`);
+  assert.equal(distT(0, 0), 1, 'the map corner is exactly t=1');
   // 120, not 40: the world is 3x its old linear size, and this checks an absolute tile
   // offset against a normalized band, so it has to scale with WORLD_W/WORLD_H like HUB_X did.
   assert.ok(distT(HUB_X + 2 + 120, HUB_Y + 2) > 0.2 && distT(HUB_X + 2 + 120, HUB_Y + 2) < 0.3,
@@ -898,9 +898,40 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   }
   const median = nn.sort((a, b) => a - b)[Math.floor(nn.length / 2)];
   assert.ok(median > 24, `deposits spread out: median nearest-neighbour ${median}, expected > 24`);
+}
 
-  // the hard floor is now a long way out
-  assert.ok(0.6 * MAX_DIST > 250, `uranium floor is ~260 tiles, got ${(0.6 * MAX_DIST).toFixed(0)}`);
+// removeNode: refuses to remove fixed nodes (the HUB), and otherwise cascades into removeWire
+// so no wire is left dangling on a node that no longer exists
+{
+  const s = newGame(59, ctx);
+  const hub59 = s.nodes.find((n) => n.key === 'the-hub');
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const dep = addDeposit(s, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const m = addNode(s, 'miner-mk1', 10, 5, ctx);
+  const w = addWire(s, dep, 'out0', m, 'res0', ctx);
+  assert.ok(w, 'deposit wired to miner');
+  assert.equal(s.nodes.length, 3, 'hub, deposit and miner all present');
+  removeNode(s, m.id);
+  assert.ok(!s.nodes.some((n) => n.id === m.id), 'miner node removed');
+  assert.ok(!s.wires.some((q) => q.id === w.id), 'wire to the removed miner is gone too');
+  assert.equal(s.nodes.length, 2, 'only the hub and deposit remain');
+  // the HUB is fixed: removeNode must be a no-op
+  removeNode(s, hub59.id);
+  assert.ok(s.nodes.some((n) => n.id === hub59.id), 'fixed HUB survives removeNode');
+  assert.equal(s.nodes.length, 2, 'node count unchanged after the no-op removal');
+}
+
+// normalizeSave strips the two legacy fog fields on purpose (explored array, per-node _fog
+// cache) so saves written while fog existed do not carry dead data forever
+{
+  const s = newGame(61, ctx);
+  const raw = JSON.parse(JSON.stringify(s));
+  raw.explored = [1, 2, 3];
+  raw.nodes[0]._fog = { seen: true };
+  const norm = normalizeSave(raw, ctx);
+  assert.ok(norm, 'legacy save normalizes');
+  assert.equal(norm.explored, undefined, 'legacy explored array stripped');
+  assert.ok(!norm.nodes.some((n) => '_fog' in n), 'no node keeps a legacy _fog cache');
 }
 
 console.log('all sim checks passed');

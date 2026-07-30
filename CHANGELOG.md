@@ -13,7 +13,9 @@
   300 seeds, median spacing between deposits goes from 17 to 30 tiles and the 90th percentile
   from 26 to 81, while the uranium hard floor moves from 87 tiles out to 260. Because each tier
   concentrates into its own band, the area around the HUB stays workable while the frontier
-  genuinely opens up. Minimum zoom drops to 0.08 so the whole map fits on screen for orientation.
+  genuinely opens up. Minimum zoom drops to 0.08 so the full map width fits on screen for
+  orientation. Existing saves keep their original 240×160 layout — `genMap` only runs for a new
+  map, so "New Map" is what gets you the bigger world.
 - **The minimap is docked** into the bottom of the inspector column at 228×152, with a `−`/`+`
   collapse whose state persists. It previously floated bottom-right and overlapped the milestone
   panel below ~880px of window width; in the flow, that whole class of collision is gone.
