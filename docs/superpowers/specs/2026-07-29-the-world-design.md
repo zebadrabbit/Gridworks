@@ -160,6 +160,23 @@ machine 130 tiles away becomes a red pixel you can see and click, which is what 
 the "can't find the problem" loop that spec 1 opened: spec 1 made problems visible on the node
 and countable in the HUD, and this makes them locatable on the world.
 
+### Clusters, and why draw order matters
+
+People build in clusters, and at 0.75 px per tile a ten-machine cluster is about 15×15 px, so
+its dots overlap. Draw order therefore decides what you see: if a healthy neighbour paints over
+a broken machine, the one pixel that mattered is gone and colouring by status has bought
+nothing.
+
+So dots are drawn **worst-last**: green, then yellow, then red on top. A single red machine in a
+cluster of nine healthy ones is always visible. Tooltip tie-breaks the same way — when several
+dots are within range, it describes the worst-lit one, for the same reason.
+
+This is the deliberate trade for not showing building type, and it follows the priority that a
+machine being off or stuck matters more than knowing which machine it is. Whether that holds up
+is a question only play will answer; revisit after the spec ships rather than guessing now. If
+type identity turns out to matter, the cheap move is shape rather than colour — a different dot
+shape per building type, keeping status on the colour channel.
+
 ### Hover tooltip
 
 Colouring by status costs the ability to tell *what* a dot is. A hover tooltip buys it back, and
