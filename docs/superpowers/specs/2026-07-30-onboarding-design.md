@@ -162,6 +162,6 @@ are browser checks.
   a long wait with a card on screen.
 - Highlighting or arrows pointing at UI elements. Text goals with hints, no spotlight system.
 - Forcing, gating or blocking any action. Advisory only.
-- Re-offering onboarding to a player who skipped. One flag, one decision.
+- Re-offering onboarding to a player who dismissed it. One decision, recorded once.
 - Translating or externalising the copy. It is English strings in the source, like every other
   string in this project.

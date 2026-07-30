@@ -9,7 +9,7 @@
   different order. It never blocks anything, and Skip or Close dismisses it for good.
 - Progress is **derived, not stored**: the current goal is simply the first unsatisfied predicate,
   so nothing enters the save and a reload resumes wherever the factory actually is. A
-  completed / skipped / in-progress marker persists, in its own localStorage key so it survives
+  never-asked / following-along / dismissed marker persists, in its own localStorage key so it survives
   New Map.
 - **Predicates key off monotonic counters** (`made`, `tGreen`) rather than live `status`, because
   `status` regresses under backpressure — a Miner Mk1 on a pure deposit saturates a starting-tier

@@ -1107,7 +1107,9 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   };
   assert.equal(tutorialStep(done), null, 'a finished first factory has no remaining goal');
 
-  // the sequence is causal, not arbitrary: a real build satisfies the steps in order
+  // the ordinary path: a real build walks the goals forward one at a time. Not a guarantee —
+  // a constructor on biomass-from-leaves satisfies step 4 with no miner, which is why the panel
+  // shows the earliest unsatisfied goal rather than assuming earlier ones passed.
   const s = newGame(93, ctx);
   s.unlocked.buildings = Object.keys(ctx.catalog);
   s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
