@@ -348,11 +348,12 @@ function drawMinimap() {
       dot(n, LIGHT_COLOR[light] ?? TYPE_COLOR[def.type] ?? '#4dd8ff', def.type === 'hub' ? 4 : 3);
     }
   }
-  // viewport rectangle
+  // viewport rectangle. toWorld returns world-space PIXELS while MM_SCALE is px-per-TILE, so
+  // divide by T first — the dot code above needs no such division because node x/y are tiles.
   const tl = toWorld(0, 0), br = toWorld(canvas.width, canvas.height);
   mcx.strokeStyle = '#ffffff88'; mcx.lineWidth = 1;
-  mcx.strokeRect(tl.x * MM_SCALE, tl.y * MM_SCALE,
-    (br.x - tl.x) * MM_SCALE, (br.y - tl.y) * MM_SCALE);
+  mcx.strokeRect(tl.x / T * MM_SCALE, tl.y / T * MM_SCALE,
+    (br.x - tl.x) / T * MM_SCALE, (br.y - tl.y) / T * MM_SCALE);
 }
 
 let mmDrag = false;
