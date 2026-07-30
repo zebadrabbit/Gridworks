@@ -5,15 +5,17 @@
 - **Wire mode is modal.** Releasing the pointer no longer ends a wire: a release and a subsequent
   click resolve identically — a compatible port finishes it, buildable ground drops a relay pole
   and continues the chain, anything else is ignored, and Escape cancels. Short wires are unchanged
-  (press, drag, release), and the same gesture extended past a target simply keeps going.
+  when the release lands on a port (press, drag, release), and the same gesture extended past a
+  target simply keeps going.
 - **Relay poles are placed while wiring**, picked from the wire's own kind — power, conveyor or
   pipe — so a long run no longer means a trip back to the palette for every hop.
 - **Panning works mid-wire**, which is what makes cross-map runs possible at all. It needed no new
-  input handling: `mousedown` already checked for a pan drag before checking for a port, and the
+  input mechanic: `mousedown` already checked for a pan drag before checking for a port, and the
   old press-hold gesture was the only thing preventing it.
-- Tests: the wire-kind to pole-kind mapping is total and every pole carries its kind on both
-  ports; a two-pole item chain conserves goods end to end; a two-pole power chain reaches a
-  distant miner.
+- Tests: the wire-kind to pole-kind mapping is exactly `{power, item, fluid}` — `resource` is
+  deliberately excluded, since a deposit wires directly to a miner — and every pole carries its
+  kind on both ports; a two-pole item chain conserves goods end to end; a two-pole power chain
+  reaches a distant miner.
 
 ## 2026-07-30 — Achievements
 

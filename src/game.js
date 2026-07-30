@@ -363,7 +363,9 @@ const mmPan = (e) => {
 };
 mm.addEventListener('mousedown', (e) => { mmDrag = true; mmPan(e); });
 mm.addEventListener('mousemove', (e) => { if (mmDrag) mmPan(e); });
-addEventListener('mouseup', () => { mmDrag = false; });
+// Registered after the canvas mouseup handler below (not here, where mmDrag is declared), so it
+// runs second: same-target listeners fire in registration order, and the wire-resolve handler's
+// `!mmDrag` check needs to see the drag's true state before this clears it for the next one.
 
 // Colouring dots by status costs building identity; hovering buys it back. Reuses the
 // existing #tooltip element rather than adding a second tooltip system.
@@ -444,6 +446,7 @@ function updateTooltip(e) {
 const POLE_FOR = { power: 'power-pole', item: 'conveyor-pole', fluid: 'pipe-pole' };
 
 function resolveWireClick(w) {
+  ui.hint = '';
   const from = ui.wireFrom;
   const a = state.nodes.find((q) => q.id === from.node.id);
   if (!a) { setMode('idle'); return; }
@@ -453,7 +456,6 @@ function resolveWireClick(w) {
     if (S.canConnect(a, from.port.id, over.node, over.port.id, state, ctx)) {
       const nw = S.addWire(state, a, from.port.id, over.node, over.port.id, ctx);
       if (nw) nw.style = ui.wireStyle;
-      ui.hint = '';
       setMode('idle');
       refreshInspector();
     }
@@ -476,7 +478,6 @@ function resolveWireClick(w) {
   if (!into) { S.removeNode(state, pole.id); return; }
   const nw = S.addWire(state, a, from.port.id, pole, into.id, ctx);
   if (nw) nw.style = ui.wireStyle;
-  ui.hint = '';
   ui.wireFrom = { node: pole, port: ports.find((p) => p.id !== into.id) ?? into };
   refreshInspector();
 }
@@ -556,12 +557,13 @@ addEventListener('mouseup', (e) => {
   // scroll. `e.target === canvas` matters because this listener is on window and `ui.mouse` only
   // tracks canvas movement — without it, clicking the inspector mid-chain would resolve against
   // a stale position, place a phantom pole, and rebuild the panel under an open <select>.
-  if (ui.mode === 'wire' && ui.wireFrom && !ui.drag?.pan && e.target === canvas) {
+  if (ui.mode === 'wire' && ui.wireFrom && !ui.drag?.pan && e.target === canvas && !mmDrag) {
     resolveWireClick(ui.mouse);
   }
   ui.drag = null;
   if (fromCanvas) refreshInspector();
 });
+addEventListener('mouseup', () => { mmDrag = false; });
 
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
@@ -885,7 +887,8 @@ function updateHud() {
   document.getElementById('hud-shipped').textContent = `📦 ${Math.floor(total)} shipped`;
   document.getElementById('hud-seed').textContent = `🌱 ${state.seed}`;
   document.getElementById('hud-hint').textContent = ui.hint ||
-    (ui.mode === 'wire' ? 'drag to a matching port' : 'drag ports to wire · right-drag to pan · wheel to zoom');
+    (ui.mode === 'wire' ? 'click a port to finish · click ground for a pole · right-drag to pan · esc = cancel'
+      : 'drag ports to wire · right-drag to pan · wheel to zoom');
 }
 
 // --------------------------------------------------------------- persistence
@@ -961,7 +964,7 @@ async function main() {
     state = S.newGame(seed, ctx);
     lastPhase = state.elevator?.phase ?? 0;
     seedAchievements();
-    select(null); save(); buildPalette(); updateMilestonePanel();
+    setMode('idle'); select(null); save(); buildPalette(); updateMilestonePanel();
   };
   document.getElementById('btn-reset').onclick = () => {
     if (!confirm('Abandon this factory and generate a new map?')) return;
@@ -992,7 +995,7 @@ async function main() {
       state = s;
       lastPhase = state.elevator?.phase ?? 0;
       seedAchievements();
-      select(null); save(); buildPalette(); updateMilestonePanel();
+      setMode('idle'); select(null); save(); buildPalette(); updateMilestonePanel();
       toast('Save imported');
     } catch (err) { alert('Import failed: ' + err.message); }
   };

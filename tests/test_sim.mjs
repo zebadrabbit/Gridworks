@@ -989,8 +989,17 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
 
 // wiring: the pole kinds a chain places, and that a chained run actually carries goods
 {
-  // every wire kind that can be drawn maps to a pole that exists and carries that kind
+  // This is a hand-copy of POLE_FOR in game.js, not an import of it: sim.js must stay DOM-free,
+  // so game.js (which has no test suite) cannot be imported here. That means renaming a pole key
+  // in game.js will not break this test — only a mismatch in the sim-side contract below will.
   const POLE_FOR = { power: 'power-pole', item: 'conveyor-pole', fluid: 'pipe-pole' };
+  // The mapping is deliberately NOT total: portsOf() can also emit a `resource` port kind (a
+  // deposit's outputs and a miner's res-in), and there is no resource pole, because a deposit
+  // wires directly to a miner rather than relaying through anything. Assert the exact key set so
+  // a future kind silently missing its pole (or gaining one it shouldn't) is actually caught —
+  // iterating Object.entries(POLE_FOR) alone can only ever check keys already present in it.
+  assert.deepEqual(Object.keys(POLE_FOR).sort(), ['fluid', 'item', 'power'],
+    'POLE_FOR covers exactly the pole-bearing kinds; resource deliberately has none');
   for (const [kind, key] of Object.entries(POLE_FOR)) {
     const def = ctx.catalog[key];
     assert.ok(def, `${key} exists in the catalog`);

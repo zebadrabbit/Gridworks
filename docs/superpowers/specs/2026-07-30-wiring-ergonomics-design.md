@@ -1,4 +1,4 @@
-# Wiring Ergonomics: Pole Chaining & Square Routing — Design
+# Wiring Ergonomics: Pole Chaining — Design
 
 Date: 2026-07-30
 Status: approved
@@ -10,7 +10,7 @@ fit on screen, at which point the ports are too small to aim at. Relay poles wer
 workaround, but placing each one means returning to the palette, clicking the pole, clicking the
 ground, then starting a fresh wire.
 
-This spec makes a long run one continuous gesture, and adds orthogonal wire routing.
+This spec makes a long run one continuous gesture.
 
 ## One resolution rule
 
@@ -92,16 +92,18 @@ handling, which has no test suite by design.
 
 `tests/test_sim.mjs` gains:
 
-- The wire-kind → pole-kind mapping is total and correct: every wire kind that can be drawn maps
-  to a pole that exists in the catalog and carries that kind on both of its ports.
+- The wire-kind → pole-kind mapping is exactly `{power, item, fluid}`, and each of those kinds
+  maps to a pole that exists in the catalog and carries that kind on both of its ports. `resource`
+  deliberately has no pole — a deposit wires directly to a miner — and the test asserts that
+  exclusion rather than merely iterating over the keys that happen to be present.
 - Chain topology: given a source, a pole and a destination, wiring source → pole → destination
   produces two wires whose endpoints connect as expected, and resources flow end to end. This is
   what a chained placement builds, verified without needing the input layer.
 
 Everything else is a browser check: click-to-start, release-and-click equivalence, chaining
 several poles in one gesture, right-drag panning mid-wire, `Escape` mid-chain, a blocked
-placement reporting its reason, the three-way style cycle, and confirming that a plain two-port
-wire still takes exactly one press-drag-release.
+placement reporting its reason, and confirming that a plain two-port wire still takes exactly one
+press-drag-release.
 
 ## Out of scope
 
@@ -113,5 +115,5 @@ wire still takes exactly one press-drag-release.
   loop, which is a sim-model change and not a new building.
 - **Smart Splitters.** A separate feature, backlogged with its filter semantics recorded.
 - Undo. There is none today, and a stray pole is one `Del` away.
-- Auto-routing or pathfinding. Square routing lays out segments between points the player chose;
+- Auto-routing or pathfinding. Pole chaining lays out segments between points the player chose;
   it does not choose the points.

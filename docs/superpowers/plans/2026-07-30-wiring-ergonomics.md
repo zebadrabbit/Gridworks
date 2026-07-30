@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make a cross-map wire one continuous gesture — click a port, pan freely, click to drop relay poles, click the target — and add orthogonal wire routing.
+**Goal:** Make a cross-map wire one continuous gesture — click a port, pan freely, click to drop relay poles, click the target.
 
-**Architecture:** Wire mode becomes modal: `mouseup` no longer exits it. A single resolver handles both a pointer release and a subsequent click identically, so existing press-drag-release muscle memory is untouched while the same gesture extended past a target keeps going. Right-drag panning mid-wire then works for free, because `mousedown`'s pan branch already precedes the port branch and never consults `ui.mode`. Square routing is a third `wire.style` value.
+**Architecture:** Wire mode becomes modal: `mouseup` no longer exits it. A single resolver handles both a pointer release and a subsequent click identically, so existing press-drag-release muscle memory is untouched while the same gesture extended past a target keeps going. Right-drag panning mid-wire then works for free, because `mousedown`'s pan branch already precedes the port branch and never consults `ui.mode`.
 
 **Tech Stack:** Vanilla ES modules, no build step, no dependencies. Canvas 2D, plain DOM. Tests are `node:assert` in `tests/test_sim.mjs`, run with `./manage.sh test`.
 
@@ -281,7 +281,7 @@ Insert directly below the `# Changelog` heading in `CHANGELOG.md`:
 - **Relay poles are placed while wiring**, picked from the wire's own kind — power, conveyor or
   pipe — so a long run no longer means a trip back to the palette for every hop.
 - **Panning works mid-wire**, which is what makes cross-map runs possible at all. It needed no new
-  input handling: `mousedown` already checked for a pan drag before checking for a port, and the
+  input mechanic: `mousedown` already checked for a pan drag before checking for a port, and the
   old press-hold gesture was the only thing preventing it.
 - Tests: the wire-kind to pole-kind mapping is total and every pole carries its kind on both
   ports; a two-pole item chain conserves goods end to end; a two-pole power chain reaches a
