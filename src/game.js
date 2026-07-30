@@ -531,7 +531,7 @@ canvas.addEventListener('mousemove', (e) => {
   updateTooltip(e);
 });
 
-addEventListener('mouseup', () => {
+addEventListener('mouseup', (e) => {
   // This listener is on window, not the canvas, because a drag may end anywhere — but only
   // a canvas interaction can change what the inspector shows. Rebuilding it on every mouseup
   // destroys the <select> a click just opened (box.innerHTML replaces the element), so the
@@ -550,9 +550,13 @@ addEventListener('mouseup', () => {
     } else { n.x = ui.drag.fx; n.y = ui.drag.fy; }
     state.nodes.push(n);
   }
-  // `!ui.drag?.pan` matters: a right-drag pan also fires mouseup, and without the check a pan
-  // that ends over open ground would drop a pole where the player only meant to scroll
-  if (ui.mode === 'wire' && ui.wireFrom && !ui.drag?.pan) resolveWireClick(ui.mouse);
+  // `!ui.drag?.pan` keeps a right-drag pan from dropping a pole where the player only meant to
+  // scroll. `e.target === canvas` matters because this listener is on window and `ui.mouse` only
+  // tracks canvas movement — without it, clicking the inspector mid-chain would resolve against
+  // a stale position, place a phantom pole, and rebuild the panel under an open <select>.
+  if (ui.mode === 'wire' && ui.wireFrom && !ui.drag?.pan && e.target === canvas) {
+    resolveWireClick(ui.mouse);
+  }
   ui.drag = null;
   if (fromCanvas) refreshInspector();
 });
