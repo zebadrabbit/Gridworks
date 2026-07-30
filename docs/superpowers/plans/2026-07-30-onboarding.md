@@ -4,7 +4,7 @@
 
 **Goal:** Walk a new player from an empty world to their first shipped item with five outcome-based goals, and document the controls that have no contextual hint.
 
-**Architecture:** `sim.js` gains `TUTORIAL` — an ordered array of `{id, goal, hint, test}` — and `tutorialStep(state)`, returning the first entry whose predicate fails or `null` when all pass. Progress is therefore derived from the factory itself, exactly like `ACHIEVEMENTS`, with nothing in the save. `game.js` adds an offer card, an advisory progress panel, and a `?` keybind panel, plus one boolean in `localStorage` recording that onboarding was completed or skipped.
+**Architecture:** `sim.js` gains `TUTORIAL` — an ordered array of `{id, goal, hint, test}` — and `tutorialStep(state)`, returning the first entry whose predicate fails or `null` when all pass. Predicates key off the **monotonic lifetime counters** `made` and `tGreen` rather than live `status`, because `status` regresses under backpressure and would send the panel backwards. Progress is therefore derived from the factory itself, exactly like `ACHIEVEMENTS`, with nothing in the save. `game.js` adds an offer card, an advisory progress panel, and a `?` keybind panel, plus one boolean in `localStorage` recording that onboarding was completed or skipped.
 
 **Tech Stack:** Vanilla ES modules, no build step, no dependencies. Plain DOM for panels. Tests are `node:assert` in `tests/test_sim.mjs`, run with `./manage.sh test`.
 

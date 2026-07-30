@@ -34,11 +34,29 @@ verified by one predicate. Leaning on that collapses the six dependencies into f
 
 | # | Goal | Predicate | What it forces the player to discover |
 |---|---|---|---|
-| 1 | Get power flowing | any generator with `status === 'generating'` | plant deposits are the bootstrap |
-| 2 | Mine some ore | any miner with `status === 'mining'` | the `resource` port, and that miners need power |
-| 3 | Smelt it | any node with `key === 'smelter'` and `status === 'crafting'` | recipes exist and live in the inspector |
-| 4 | Make a part | any node with `key === 'constructor'` and `status === 'crafting'` | parts come from chained machines |
+| 1 | Get power flowing | a `biomass-burner` with `tGreen > 0` | plant deposits are the bootstrap |
+| 2 | Mine some ore | any `miner-*` with `made > 0` | the `resource` port, and that miners need power |
+| 3 | Smelt it | a `smelter` with `made > 0` | recipes exist and live in the inspector |
+| 4 | Make a part | a `constructor` with `made > 0` | parts come from chained machines |
 | 5 | Ship it | `state.shipped` has any entry above zero | the HUB is the sink |
+
+### Why counters, not `status`
+
+An earlier draft tested live `status` — `'generating'`, `'mining'`, `'crafting'`. **That was wrong, and
+the way it was wrong is worth recording.** `status` is not monotonic. A Miner Mk1 on a *pure*
+deposit produces 120/min into a starting-tier belt carrying 60/min, so its buffer saturates and it
+flips permanently to `'output full'`. No node then reports `'mining'`, and the panel regresses to
+"mine some iron ore" while the player watches a working mine→smelt line. It is a stable steady
+state, not a flicker, and roughly a quarter of deposits are pure.
+
+The lifetime counters added by spec 1 are monotonic by construction: `made` on miners and
+machines, `tGreen` on everything `lightOf` lights, generators included. Keying off those makes the
+causal-order claim below actually true rather than merely plausible.
+
+Step 1 narrows to `biomass-burner` specifically because `tGreen` is tracked for miners and
+machines too, so "any node with `tGreen > 0`" would be satisfied by the wrong thing. That
+narrowing is safe: it is the only generator in `START_UNLOCKED`, and every other generator is
+gated behind a milestone that itself requires shipping — which is step 5.
 
 Outcome-based rather than scripted matters for three reasons. It never dictates *how*, so a player
 who builds in a different order or adds extra machines is never told they are wrong. It cannot
