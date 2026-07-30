@@ -865,6 +865,10 @@ function toast(msg) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = msg;
+  // stack instead of overlapping: toasts genuinely coincide — an elevator phase completing
+  // fires both frame()'s phase toast and this feature's achievement toast for the same event,
+  // and the welcome-back toast can land alongside an offline earn
+  el.style.top = (56 + document.querySelectorAll('.toast').length * 44) + 'px';
   document.body.appendChild(el);
   setTimeout(() => el.classList.add('fade'), 7000);
   setTimeout(() => el.remove(), 8000);
@@ -974,6 +978,9 @@ async function main() {
     alertsBox.classList.remove('open');
     alertsBox.dataset.sig = ''; // keep the "force a rebuild on reopen" invariant regardless of what closed it
     achBox.classList.toggle('open');
+    // achBox.dataset.sig is deliberately never reset on close (unlike alertsBox): ACHIEVEMENTS
+    // has a fixed iteration order, so the sig-guard in refreshAchievements only ever skips a
+    // rebuild when the earned set is byte-identical to what's already rendered — never stale.
     refreshAchievements();
   };
 
