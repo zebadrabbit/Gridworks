@@ -76,6 +76,32 @@ export const ELEVATOR_PHASES = [
 ];
 export const ELEVATOR_ITEMS = [...new Set(ELEVATOR_PHASES.flatMap((p) => Object.keys(p.cost)))];
 
+// ---------------------------------------------------------------- achievements
+
+// Generated from the ladders above rather than hand-listed: a parallel list would duplicate
+// names that already exist and drift the moment a rung is added, renamed or reordered, and
+// inventing achievement names would be inventing content (docs/SOURCE_OF_TRUTH.md).
+// Both progression counters are monotonic indices, so every achievement here is a pure
+// function of state and nothing is stored in the save. A future non-derivable achievement —
+// anything phrased as a transient peak — needs the latched `state.achievements` described in
+// the design doc; derived entries keep working unchanged when it arrives.
+export const ACHIEVEMENTS = [
+  ...MILESTONES.map((m, i) => ({
+    id: `milestone-${i}`, kind: 'milestone', name: m.name,
+    desc: `Complete the ${m.name} milestone`,
+    test: (s) => (s.unlocked?.milestone ?? 0) > i,
+  })),
+  ...ELEVATOR_PHASES.map((p, i) => ({
+    id: `elevator-${i}`, kind: 'elevator', name: p.name,
+    desc: `Ship Project Assembly phase ${i + 1}: ${p.name}`,
+    test: (s) => (s.elevator?.phase ?? 0) > i,
+  })),
+];
+
+export function earned(state) {
+  return ACHIEVEMENTS.filter((a) => a.test(state)).map((a) => a.id);
+}
+
 export function validateMilestones(ctx) {
   for (const m of MILESTONES) {
     for (const res of Object.keys(m.cost)) if (!ctx.names[res]) throw new Error(`milestone ${m.name}: unknown item ${res}`);

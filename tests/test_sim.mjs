@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H, ACHIEVEMENTS, earned } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -932,6 +932,59 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.ok(norm, 'legacy save normalizes');
   assert.equal(norm.explored, undefined, 'legacy explored array stripped');
   assert.ok(!norm.nodes.some((n) => '_fog' in n), 'no node keeps a legacy _fog cache');
+}
+
+// achievements: derived from the progression ladders, never stored
+{
+  assert.equal(ACHIEVEMENTS.length, MILESTONES.length + ELEVATOR_PHASES.length,
+    'one achievement per ladder rung — adding a milestone must not silently skip its achievement');
+  assert.equal(new Set(ACHIEVEMENTS.map((a) => a.id)).size, ACHIEVEMENTS.length, 'ids are unique');
+  for (const a of ACHIEVEMENTS) {
+    assert.ok(a.id && a.name && a.desc, `${a.id} has id, name and desc`);
+    assert.ok(a.kind === 'milestone' || a.kind === 'elevator', `${a.id} has a known kind`);
+    assert.equal(typeof a.test, 'function', `${a.id} has a predicate`);
+  }
+
+  // a fresh game has earned nothing
+  const fresh = newGame(71, ctx);
+  assert.deepEqual(earned(fresh), [], 'a new game earns nothing');
+
+  // three milestones in earns exactly the first three, and no elevator achievements
+  const mid = newGame(73, ctx);
+  mid.unlocked.milestone = 3;
+  const midEarned = earned(mid);
+  assert.deepEqual(midEarned, ['milestone-0', 'milestone-1', 'milestone-2'],
+    `milestone 3 earns exactly the first three, got ${midEarned}`);
+
+  // finishing the elevator earns all four elevator achievements
+  const done = newGame(75, ctx);
+  done.unlocked.milestone = MILESTONES.length;
+  done.elevator.phase = ELEVATOR_PHASES.length;
+  const all = earned(done);
+  assert.equal(all.length, ACHIEVEMENTS.length, 'a finished game earns everything');
+  assert.ok(all.includes(`elevator-${ELEVATOR_PHASES.length - 1}`),
+    'the final elevator phase is the win achievement');
+
+  // monotonic: raising either counter never shrinks the earned set
+  const s = newGame(77, ctx);
+  let prev = earned(s).length;
+  for (let m = 0; m <= MILESTONES.length; m++) {
+    s.unlocked.milestone = m;
+    const n = earned(s).length;
+    assert.ok(n >= prev, `milestone ${m} did not shrink the earned set (${prev} -> ${n})`);
+    prev = n;
+  }
+  for (let p = 0; p <= ELEVATOR_PHASES.length; p++) {
+    s.elevator.phase = p;
+    const n = earned(s).length;
+    assert.ok(n >= prev, `phase ${p} did not shrink the earned set (${prev} -> ${n})`);
+    prev = n;
+  }
+
+  // derived, not stored: nothing was written to the save
+  assert.equal(s.achievements, undefined, 'earned() must not write state');
+  const rt = normalizeSave(JSON.parse(JSON.stringify(s)), ctx);
+  assert.deepEqual(earned(rt), earned(s), 'earned survives a save round-trip because it is derived');
 }
 
 console.log('all sim checks passed');
