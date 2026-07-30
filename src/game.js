@@ -841,6 +841,8 @@ async function main() {
   const data = await (await fetch('data/source/satisfactory_data.json')).json();
   ctx = S.buildCtx(data);
   state = load() ?? S.newGame((Math.random() * 1e9) | 0, ctx);
+  S.revealAll(state, ctx); // newGame already does this, but load()'s normalizeSave path does
+  // not — without this, a loaded save renders fully fogged until the first 0.1s tick fires
   const away = state.savedAt ? (Date.now() - state.savedAt) / 1000 : 0;
   if (away > 60) {
     const before = Object.values(state.shipped).reduce((s, v) => s + v, 0);

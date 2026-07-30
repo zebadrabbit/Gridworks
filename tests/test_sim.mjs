@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, weightAt, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, CHUNK, CHUNK_W, CHUNK_H, chunkIndex, removeNode } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, weightAt, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, CHUNK, CHUNK_W, CHUNK_H, chunkIndex, removeNode, revealAll } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -700,8 +700,15 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   // no entry in data.resources at all
   assert.equal(tierFactor('leaves', 0), 1, 'plants peak at the hub');
   assert.equal(tierFactor('leaves', 1), 0, 'plants do not spawn at the map edge');
-  assert.equal(tierFactor('uranium', 0.5), 0, 'the floor applies to the factor too');
+  // uranium (tier 4, peak t=1) is far enough from t=0.5 that the band alone already zeroes
+  // it (band decays to 0 below t=0.65) — this is a band-decay check, not a floor check.
+  assert.equal(tierFactor('uranium', 0.5), 0, 'band decay alone zeroes uranium this far from its peak');
   assert.ok(tierFactor('uranium', 1) > 0.9, 'uranium peaks at the map edge');
+  // the floor's only live region is tier 3, t in [0.4, 0.6): there the band alone would still
+  // give a nonzero factor (~0.286 at t=0.5), so these are the assertions that actually die if
+  // `if (tier >= 3 && t < FLOOR_T) return 0;` is removed from tierFactor.
+  assert.equal(tierFactor('nitrogen-gas', 0.5), 0, 'the floor zeroes tier 3 at t=0.5 even though the band alone would not');
+  assert.equal(tierFactor('bauxite', 0.5), 0, 'the floor zeroes tier 3 at t=0.5 even though the band alone would not');
 
   const res = (k) => ctx.resources.find((r) => r.key_name === k);
   assert.equal(ctx.resources.filter((r) => r.category === 'plant').length, 0,
@@ -710,12 +717,13 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.ok(weightAt(res('iron-ore'), 0) > weightAt(res('iron-ore'), 0.5),
     'iron is commoner near the hub');
   assert.equal(weightAt(res('iron-ore'), 1), 0, 'tier 0 cannot spawn at the map edge');
-  // tier 4 is floored out near the hub and peaks at the edge
-  assert.equal(weightAt(res('uranium'), 0), 0, 'uranium cannot spawn at the hub');
-  assert.equal(weightAt(res('uranium'), 0.59), 0, 'uranium is floored just inside 0.6');
+  // tier 4 peaks at the edge; both of these points are also zeroed by band decay alone
+  // (band dies below t=0.65 for tier 4), so the floor is redundant here — band-decay checks.
+  assert.equal(weightAt(res('uranium'), 0), 0, 'band decay zeroes uranium at the hub (floor coincides)');
+  assert.equal(weightAt(res('uranium'), 0.59), 0, 'band decay zeroes uranium at t=0.59, below the 0.65 band edge (floor coincides)');
   assert.ok(weightAt(res('uranium'), 1) > 0, 'uranium can spawn at the map edge');
   assert.ok(weightAt(res('nitrogen-gas'), 0.3) === 0 && weightAt(res('nitrogen-gas'), 0.8) > 0,
-    'nitrogen-gas shares the tier-3 floor');
+    'nitrogen-gas shares the tier-3 floor (t=0.3 is band decay; t=0.8 is past the floor, not testing it either)');
   // real JSON weights are attenuated, never replaced
   assert.ok(weightAt(res('iron-ore'), 0) > weightAt(res('limestone'), 0),
     'iron stays commoner than limestone at the same distance (307 vs 233)');
@@ -728,7 +736,9 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   let uraniumSeen = 0;
   for (let seed = 1000; seed < 1200; seed++) {
     const deps = genMap(seed, ctx);
-    assert.ok(deps.length >= 44, `seed ${seed} generated ${deps.length} deposits, expected >= 44`);
+    // the true minimum across 50,000 seeds is 42 (seed 15283); 44 was a spot-check lucky
+    // to the 1000-1199 sweep range, not a real floor
+    assert.ok(deps.length >= 40, `seed ${seed} generated ${deps.length} deposits, expected >= 40`);
     for (const d of deps) {
       const t = distT(d.x, d.y);
       const tier = tierOf(d.res);
@@ -798,7 +808,7 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   // the hub reveals its own chunk, and the guaranteed starters are inside that reveal
   assert.equal(s.explored[chunkIndex(HUB_X + 2, HUB_Y + 2)], 1, 'hub chunk is revealed');
   for (const d of s.nodes.filter((n) => n.key === 'deposit')) {
-    if (distT(d.x, d.y) * MAX_DIST <= START_RADIUS - CHUNK) {
+    if (distT(d.x, d.y) * MAX_DIST <= START_RADIUS) {
       assert.equal(s.explored[chunkIndex(d.x, d.y)], 1,
         `starter ${d.res} at ${d.x},${d.y} is inside the hub reveal`);
     }
@@ -844,7 +854,26 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   // a save from a differently-sized world is repaired rather than trusted
   const wrong = JSON.parse(JSON.stringify(s));
   wrong.explored = [1, 1, 1];
-  assert.equal(normalizeSave(wrong, ctx).explored.length, 600, 'wrong-length explored repaired');
+  const r2 = normalizeSave(wrong, ctx);
+  assert.equal(r2.explored.length, 600, 'wrong-length explored repaired');
+  // normalizeSave's own `delete n._fog` (separate from revealAll's) must actually run, or a
+  // node's stale cache survives the repair and revealAll silently skips it forever, leaving
+  // the repaired array permanently black. r2.explored is already exactly 600 long by this
+  // point, so revealAll's own array-repair branch does NOT fire here — this isolates
+  // normalizeSave's guard specifically.
+  revealAll(r2, ctx);
+  assert.equal(r2.explored[chunkIndex(HUB_X + 2, HUB_Y + 2)], 1, 'reveal recovers after repair');
+
+  // revealAll's own array-repair branch has the same guard, and must be tested independently:
+  // corrupt explored directly on a live state (bypassing normalizeSave entirely) so revealAll's
+  // internal repair-and-clear-cache branch is what has to fire.
+  const s2 = newGame(3001, ctx);
+  tick(s2, 0.1, ctx); // populates the hub's _fog cache at its current position
+  s2.explored = [1, 1, 1]; // corrupt in place, bypassing normalizeSave
+  revealAll(s2, ctx);
+  assert.equal(s2.explored.length, 600, 'revealAll itself repairs a wrong-length explored array');
+  assert.equal(s2.explored[chunkIndex(HUB_X + 2, HUB_Y + 2)], 1,
+    'revealAll recovers reveal after repairing in place, even with a stale _fog cache');
 }
 
 console.log('all sim checks passed');

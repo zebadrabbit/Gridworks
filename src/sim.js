@@ -179,7 +179,13 @@ export function chunkIndex(tx, ty) {
 // ponytail: called from tick() rather than from every mutation site, so placing, dragging,
 // deleting, loading and offline credit all reveal correctly with no call site to forget.
 // Each node caches its last-processed position in n._fog to skip the bounding-box loop if
-// unmoved. Moving a node invalidates the cache. Cost is O(moved buildings × chunks per radius).
+// unmoved. Moving a node invalidates the cache. Cost is O(moved buildings × chunks per radius)
+// for the reveal work itself, PLUS an unconditional O(all nodes) scan every call just to check
+// each node's cache. That second term is not free: measured during offline catch-up (where this
+// runs once per tick via simulateOffline's loop) it was 1.20s of a 10.8s catch-up at 247 nodes,
+// and 5.49s of a 45.6s catch-up at 1,047 nodes — roughly 11% of the total either way. Acceptable
+// today; if it needs trimming, add a dirty flag so unmoved states skip the call entirely, or
+// hoist the call out of simulateOffline's loop so it runs once after, not once per tick.
 export function revealAll(state, ctx) {
   if (!Array.isArray(state.explored) || state.explored.length !== CHUNK_W * CHUNK_H) {
     state.explored = new Array(CHUNK_W * CHUNK_H).fill(0);
@@ -286,7 +292,12 @@ export function genMap(seed, ctx) {
       // x and y are rounded independently, so the integer point can sit up to ~0.7 tiles
       // further out than `rad` — enough to break the "inside START_RADIUS" guarantee. Re-check
       // the constraint on the rounded coordinates, which is where it actually has to hold.
-      if (distT(x, y) * MAX_DIST > START_RADIUS) continue;
+      // The bound is START_RADIUS - CHUNK, not START_RADIUS: visibility is decided by whether
+      // a chunk's CENTRE is within reach (see revealAll), and a tile can sit up to ~CHUNK/2
+      // tiles from its own chunk centre. Without this margin, a starter placed near the edge
+      // of START_RADIUS can land in a chunk whose centre falls just outside it — guaranteed to
+      // exist, but permanently fogged on frame one. Do not simplify this back to START_RADIUS.
+      if (distT(x, y) * MAX_DIST > START_RADIUS - CHUNK) continue;
       if (!free(x, y)) continue;
       place(res, cat, x, y, true);
       break;
