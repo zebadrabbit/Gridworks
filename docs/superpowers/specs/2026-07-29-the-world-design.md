@@ -76,9 +76,45 @@ The `0.35` band width is wide enough that adjacent tiers overlap, so boundaries 
 than visible rings, and narrow enough that tier 0 and tier 4 never compete. Both constants are
 tunable; they are pinned here so two implementers produce the same curve.
 
-Weights are attenuated, never replaced, so the relative abundance the data already encodes
-survives and seeds stay varied. An early lucky caterium is still possible; that is the point of
-soft weighting over hard bands.
+### Correction: resource first, position second
+
+The paragraph that used to sit here claimed "weights are attenuated, never replaced, so the
+relative abundance the data already encodes survives." **That was false**, and it is recorded
+rather than quietly deleted because the reasoning error is the interesting part.
+
+`weightAt` is a density *at a point*. But the original implementation sampled a position
+uniformly across the map and then asked which resource belonged there — which makes a resource's
+map-wide count depend on how much map **area** its tier band covers, not on its JSON weight.
+Tier 0's band is a small disc around the HUB; tier 3's covers most of the map. Measured over
+3,000 seeds, iron ore fell from 8.42 deposits per map to 2.51 and limestone from 6.44 to 1.39,
+while bauxite rose from 1.18 to 3.42 — making a weight-41 resource commoner than a weight-307
+one, with 59% of maps holding no iron beyond the guaranteed starters.
+
+Correcting the weight cannot fix this: under uniform position sampling a tier-0 resource can
+never occupy more than its band's share of the map. Two such attempts were measured and both
+left iron near 3.0.
+
+So the order is inverted. **The resource is chosen by its JSON weight alone; the position is
+then drawn from `POS_TRIES = 40` uniform candidates by weighted reservoir sampling, each
+candidate weighted by `tierFactor` for that resource.** Weight governs *how many*; distance
+governs *where*. `tierFactor` scores a position for an already-chosen resource and must never be
+folded back into the choice of resource — `weightAt`, which did exactly that, has been deleted so
+it cannot invite a repeat.
+
+Uniform candidates are deliberate over sampling a target radius directly, which would cluster
+points near the HUB (area grows with radius), would need out-of-bounds rejection once
+`t * MAX_DIST` exceeds the map's 80-tile half-height, and would have to handle tier 0's band
+straddling `t = 0`. A small `POS_FLOOR` keeps every free candidate in contention so a crowded
+band degrades to the best spot still available rather than dropping the deposit; at zero, the
+mean map falls from 48 deposits to 42.2.
+
+Measured after the correction: iron 9.26 per map, limestone 6.52, bauxite 0.94 — each mineral's
+share within about two points of its JSON weight share — with the tier-0 to tier-3 distance gap
+at 0.368, zero floor violations, and determinism intact. An early lucky caterium is still
+possible; that is the point of soft weighting over hard bands.
+
+The lesson worth keeping: a per-point density is not a population. This spec reasoned about
+weight at a point and asserted a map-wide conclusion, and no test noticed for six tasks.
 
 ### Hard floor on the top tiers
 

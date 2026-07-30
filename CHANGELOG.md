@@ -3,15 +3,17 @@
 ## 2026-07-29 — The World
 
 - **Ore tiered by distance**: a resource→tier table in sim.js, ordered by when the existing
-  milestone ladder first needs each resource, attenuates each resource's real JSON weight by
-  how far the spot is from its tier's band. `bauxite`, `sam`, `nitrogen-gas` and `uranium`
-  additionally get a hard floor at 0.6 of map radius, so no seed can put uranium next to the
-  HUB. Weights are attenuated, never replaced: within a tier, the JSON's own weight ratios
-  still hold. A resource's map-wide count is a separate matter, governed by how much map area
-  its tier's band covers.
+  milestone ladder first needs each resource. Each deposit picks its resource by the JSON's own
+  weight, then picks *where* to sit from 40 candidate positions scored by how well each suits
+  that resource's tier — so how *common* a resource is comes from the data and nothing else,
+  while how *far out* it sits comes from its tier. `bauxite`, `sam`, `nitrogen-gas` and
+  `uranium` additionally get a hard floor at 0.6 of map radius, so no seed can put uranium next
+  to the HUB. Measured over 3,000 seeds, each mineral's share of the map tracks its JSON weight
+  share within about two points.
 - **Guaranteed playable start**: 2 iron, 1 copper, 1 limestone, 2 plant and 1 water are placed
-  before the general scatter, inside the HUB's reveal radius. They come out of the per-category
-  budgets rather than adding to them, so maps still hold 42–48 deposits (mean ~47).
+  before the general scatter, inside the HUB's reveal radius — bounded a chunk tighter than that
+  radius, because visibility is decided per chunk centre rather than per tile. They come out of
+  the per-category budgets rather than adding to them, so maps hold 48 deposits.
 - **`nitrogen-gas` can spawn**: it has been in the source JSON all along (category `water`,
   weight 40) and `water-extractor` already accepts it, but the water scatter hardcoded the
   resource, so it had never appeared in any game. The scatter now picks by category weight.
