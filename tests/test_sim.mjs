@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, weightAt, HUB_X, HUB_Y, START_RADIUS } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -678,6 +678,74 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
     for (let i = 0; i < 1200; i++) tick(s, 0.1, ctx); // 120s
     assert.ok((tank.buf.water ?? 0) > 100, `fluid passes the pole, got ${tank.buf.water}`);
   }
+}
+
+// ore tiering: distance from the HUB attenuates each resource's spawn weight, and the
+// late-game tiers have a hard floor so no seed can put uranium next to the hub
+{
+  assert.equal(tierOf('iron-ore'), 0);
+  assert.equal(tierOf('coal'), 1);
+  assert.equal(tierOf('crude-oil'), 2);
+  assert.equal(tierOf('nitrogen-gas'), 3);
+  assert.equal(tierOf('uranium'), 4);
+  assert.equal(tierOf('not-a-real-resource'), 0, 'unknown resources default to tier 0');
+
+  // distT measures from the HUB centre, not its corner
+  assert.equal(distT(HUB_X + 2, HUB_Y + 2), 0, 'hub centre is t=0');
+  assert.ok(distT(0, 0) > 0.99, `map corner is t~1, got ${distT(0, 0)}`);
+  assert.ok(distT(HUB_X + 2 + 40, HUB_Y + 2) > 0.2 && distT(HUB_X + 2 + 40, HUB_Y + 2) < 0.3,
+    '40 tiles out lands in the tier-1 band');
+
+  // tierFactor takes a key string, so it also works for leaves, which is an item and has
+  // no entry in data.resources at all
+  assert.equal(tierFactor('leaves', 0), 1, 'plants peak at the hub');
+  assert.equal(tierFactor('leaves', 1), 0, 'plants do not spawn at the map edge');
+  assert.equal(tierFactor('uranium', 0.5), 0, 'the floor applies to the factor too');
+  assert.ok(tierFactor('uranium', 1) > 0.9, 'uranium peaks at the map edge');
+
+  const res = (k) => ctx.resources.find((r) => r.key_name === k);
+  assert.equal(ctx.resources.filter((r) => r.category === 'plant').length, 0,
+    'there is no plant resource category — leaves must stay hardcoded in the scatter');
+  // tier 0 peaks at the hub and dies off with distance
+  assert.ok(weightAt(res('iron-ore'), 0) > weightAt(res('iron-ore'), 0.5),
+    'iron is commoner near the hub');
+  assert.equal(weightAt(res('iron-ore'), 1), 0, 'tier 0 cannot spawn at the map edge');
+  // tier 4 is floored out near the hub and peaks at the edge
+  assert.equal(weightAt(res('uranium'), 0), 0, 'uranium cannot spawn at the hub');
+  assert.equal(weightAt(res('uranium'), 0.59), 0, 'uranium is floored just inside 0.6');
+  assert.ok(weightAt(res('uranium'), 1) > 0, 'uranium can spawn at the map edge');
+  assert.ok(weightAt(res('nitrogen-gas'), 0.3) === 0 && weightAt(res('nitrogen-gas'), 0.8) > 0,
+    'nitrogen-gas shares the tier-3 floor');
+  // real JSON weights are attenuated, never replaced
+  assert.ok(weightAt(res('iron-ore'), 0) > weightAt(res('limestone'), 0),
+    'iron stays commoner than limestone at the same distance (307 vs 233)');
+}
+
+// tiering actually biases placement across many seeds, and the floor holds on every one
+{
+  const FLOOR_T = 0.6;
+  const near = [], far = [];
+  let uraniumSeen = 0;
+  for (let seed = 1000; seed < 1200; seed++) {
+    const deps = genMap(seed, ctx);
+    assert.ok(deps.length >= 44, `seed ${seed} generated ${deps.length} deposits, expected >= 44`);
+    for (const d of deps) {
+      const t = distT(d.x, d.y);
+      const tier = tierOf(d.res);
+      if (tier >= 3) {
+        assert.ok(t >= FLOOR_T,
+          `seed ${seed}: ${d.res} (tier ${tier}) spawned at t=${t.toFixed(3)}, inside the floor`);
+      }
+      if (d.res === 'uranium') uraniumSeen++;
+      if (tier === 0) near.push(t);
+      if (tier === 3) far.push(t);
+    }
+  }
+  const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+  assert.ok(far.length > 0, 'tier-3 resources do spawn somewhere across 200 seeds');
+  assert.ok(mean(far) - mean(near) >= 0.20,
+    `tier 3 spawns further out than tier 0 (near ${mean(near).toFixed(3)}, far ${mean(far).toFixed(3)})`);
+  assert.ok(uraniumSeen > 0, 'uranium is still reachable on some seed');
 }
 
 console.log('all sim checks passed');

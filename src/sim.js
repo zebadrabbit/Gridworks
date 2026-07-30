@@ -136,39 +136,89 @@ const PURITIES = [[0.5, 'impure'], [1, 'normal'], [2, 'pure']];
 export const HUB_X = Math.floor(WORLD_W / 2) - 2;
 export const HUB_Y = Math.floor(WORLD_H / 2) - 2;
 
+// ponytail: tier order is derived from when the MILESTONES ladder above first needs each
+// resource — it is not a new balance pass. Tune the band constants, not the ordering.
+const RESOURCE_TIER = {
+  'iron-ore': 0, limestone: 0, leaves: 0,
+  'copper-ore': 1, coal: 1, water: 1,
+  'caterium-ore': 2, 'raw-quartz': 2, sulfur: 2, 'crude-oil': 2,
+  bauxite: 3, sam: 3, 'nitrogen-gas': 3,
+  uranium: 4,
+};
+const TIER_BAND = 0.35; // half-width of a tier's band; wide enough that neighbours overlap
+const FLOOR_T = 0.6;    // tiers 3-4 cannot spawn nearer the hub than this
+export const START_RADIUS = 40; // HUB fog reveal radius, and the guaranteed-start band
+// computed rather than hardcoded so it stays correct if the world is ever resized
+export const MAX_DIST = Math.hypot(WORLD_W / 2, WORLD_H / 2);
+
+// distance from the HUB centre (it is a 4-tile building, so centre is +2), normalized to [0,1]
+export function distT(x, y) {
+  return Math.min(1, Math.hypot(x - (HUB_X + 2), y - (HUB_Y + 2)) / MAX_DIST);
+}
+export function tierOf(res) { return RESOURCE_TIER[res] ?? 0; }
+// How well this distance suits the resource's tier, in [0,1]. Takes a key string rather than
+// a resources entry because `leaves` is an item with no entry in data.resources — the plant
+// scatter needs distance tiering too, and gets it by rejecting positions with 1 - factor odds.
+export function tierFactor(res, t) {
+  const tier = tierOf(res);
+  if (tier >= 3 && t < FLOOR_T) return 0;
+  return Math.max(0, 1 - Math.abs(t - tier / 4) / TIER_BAND);
+}
+// the JSON's own weight, attenuated — never replaced
+export function weightAt(r, t) { return r.weight * tierFactor(r.key_name, t); }
+
 export function genMap(seed, ctx) {
   const rng = mulberry32(seed);
   const deposits = [];
-  const totalW = ctx.resources.filter((r) => r.category === 'mineral')
-    .reduce((s, r) => s + r.weight, 0);
-  const pickMineral = () => {
-    let roll = rng() * totalW;
-    for (const r of ctx.resources) {
-      if (r.category !== 'mineral') continue;
-      roll -= r.weight;
+  // weighted pick within one resource category, biased by distance from the hub. Returns
+  // null when every resource in the category is floored out here, so the caller re-rolls
+  // the position instead of forcing a spawn that breaks the tiering.
+  const pickWeighted = (cat, t) => {
+    const pool = ctx.resources.filter((r) => r.category === cat);
+    const total = pool.reduce((s, r) => s + weightAt(r, t), 0);
+    if (!(total > 0)) return null;
+    let roll = rng() * total;
+    for (const r of pool) {
+      roll -= weightAt(r, t);
       if (roll <= 0) return r.key_name;
     }
-    return 'iron-ore';
+    return pool[pool.length - 1].key_name;
   };
   const free = (x, y) => (Math.abs(HUB_X - x) > 8 || Math.abs(HUB_Y - y) > 8) &&
     deposits.every((d) => Math.abs(d.x - x) > 12 || Math.abs(d.y - y) > 12);
-  const scatter = (count, resFn, cat) => {
+  const place = (res, cat, x, y) => {
+    const p = rng();
+    const [mult, purity] = p < 0.25 ? PURITIES[0] : p < 0.75 ? PURITIES[1] : PURITIES[2];
+    deposits.push({ id: deposits.length, res, cat, purity, mult, x, y, size: 2 });
+  };
+  // ponytail: 200 tries, up from 60 — a position can now also be rejected on tier grounds,
+  // so rejections are commoner than before. The >= 44 deposit assertion in the tests catches
+  // it if this ever starts starving.
+  // `fixedRes` is for categories with no entry in data.resources (only `plant`, whose
+  // `leaves` is an item): tier the position by rejection instead of by weighted pick.
+  const scatter = (count, cat, fixedRes) => {
     for (let i = 0; i < count; i++) {
-      for (let tries = 0; tries < 60; tries++) {
+      for (let tries = 0; tries < 200; tries++) {
         const x = 2 + Math.floor(rng() * (WORLD_W - 6));
         const y = 2 + Math.floor(rng() * (WORLD_H - 6));
         if (!free(x, y)) continue;
-        const p = rng();
-        const [mult, purity] = p < 0.25 ? PURITIES[0] : p < 0.75 ? PURITIES[1] : PURITIES[2];
-        deposits.push({ id: deposits.length, res: resFn(), cat, purity, mult, x, y, size: 2 });
+        const t = distT(x, y);
+        let res = fixedRes;
+        if (res) {
+          if (rng() >= tierFactor(res, t)) continue;
+        } else {
+          res = pickWeighted(cat, t);
+          if (!res) continue;
+        }
+        place(res, cat, x, y);
         break;
       }
     }
   };
-  scatter(28, pickMineral, 'mineral');
-  scatter(5, () => 'crude-oil', 'oil');
-  scatter(7, () => 'water', 'water');
-  scatter(8, () => 'leaves', 'plant');
+  scatter(28, 'mineral');
+  scatter(5, 'oil');
+  scatter(7, 'water');
+  scatter(8, 'plant', 'leaves');
   return deposits;
 }
 
