@@ -204,7 +204,7 @@ git commit -m "feat(sim): outcome-based onboarding goals derived from factory st
 
 **Interfaces:**
 - Consumes: `S.TUTORIAL`, `S.tutorialStep(state)` from Task 1.
-- Produces: `TUT_KEY` / `tutDone` in `game.js`, and `refreshTutorial()`. Task 3 does not depend on these.
+- Produces: `TUT_KEY`, `tutState` and `setTut` in `game.js`, plus `refreshTutorial()`. Task 3 does not depend on these.
 
 - [ ] **Step 1: Add the markup**
 
