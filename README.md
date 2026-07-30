@@ -10,7 +10,9 @@ Elevator: ship Project Assembly parts through 4 phases to win. Progress keeps
 accruing while the tab is closed (offline progress, capped at 8h). Every node's
 status lights red/yellow/green, a `⚠ N` HUD chip lists what needs attention and
 pans the camera there on click, and the inspector tracks each machine's lifetime
-uptime and production.
+uptime and production. Ore is tiered by distance from the HUB — iron and limestone
+at your feet, uranium out past the horizon — with a guaranteed playable start, and a
+minimap tracks your factory's health across a map that fog reveals as you build into it.
 
 `data/source/satisfactory_data.json` is the immutable source of truth for all items,
 buildings, recipes, and resource weights (see `docs/SOURCE_OF_TRUTH.md`).
@@ -63,6 +65,8 @@ Tests also run in CI (GitHub Actions) on every push and pull request.
 
 ## Docs
 
+- `docs/superpowers/specs/2026-07-29-the-world-design.md` — tiered ore, fog of war,
+  minimap
 - `docs/superpowers/specs/2026-07-29-know-your-factory-design.md` — status lights,
   alerts, machine analytics
 - `docs/superpowers/specs/2026-07-27-*.md` — offline progress, QoL (seed/save/pause),

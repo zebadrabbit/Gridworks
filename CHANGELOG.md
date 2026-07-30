@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-07-29 — The World
+
+- **Ore tiered by distance**: a resource→tier table in sim.js, ordered by when the existing
+  milestone ladder first needs each resource, attenuates each resource's real JSON weight by
+  how far the spot is from its tier's band. `uranium`, `sam` and `nitrogen-gas` additionally
+  get a hard floor at 0.6 of map radius, so no seed can put uranium next to the HUB. Weights
+  are attenuated, never replaced, so the abundances the data already encodes survive and seeds
+  stay varied.
+- **Guaranteed playable start**: 2 iron, 1 copper, 1 limestone, 2 plant and 1 water are placed
+  before the general scatter, inside the HUB's reveal radius. They come out of the per-category
+  budgets rather than adding to them, so maps still hold ~48 deposits.
+- **`nitrogen-gas` can spawn**: it has been in the source JSON all along (category `water`,
+  weight 40) and `water-extractor` already accepts it, but the water scatter hardcoded the
+  resource, so it had never appeared in any game. The scatter now picks by category weight.
+- **Fog of war**: purely aesthetic and toggleable (🌫 in the HUD, persisted to its own
+  localStorage key so it survives New Map and import). Buildings you own reveal 8-tile chunks
+  around them; the HUB reveals a larger radius, which is what makes the guaranteed start
+  visible. Revealing is permanent — demolishing does not re-fog. Fogged deposits are neither
+  drawn nor hit-tested, which cannot block anything, since placing a building next to a deposit
+  reveals it first.
+- **Minimap**: bottom-right, with explored chunks, deposits, the viewport rectangle, and
+  click-drag to pan. Your buildings are drawn in their status-light colour and painted
+  worst-last, so one red machine in a cluster of healthy ones is never hidden — which makes a
+  problem 130 tiles away a red pixel you can see and click. Hovering any dot names it, reusing
+  the existing tooltip.
+- Tests: tier floor and start-bundle guarantees swept across 200 seeds each, a bias check that
+  tier-3 really does spawn further out than tier-0, `nitrogen-gas` reachability, chunk maths,
+  reveal monotonicity through both live and offline simulation, and `explored` surviving save
+  normalization including repair of a wrong-length array.
+
 ## 2026-07-29 — Relay Poles
 
 - **Power, Conveyor and Pipe Poles**: 1-tile relay nodes, one port in and one out, unlocked

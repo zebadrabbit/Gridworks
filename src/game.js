@@ -366,6 +366,43 @@ mm.addEventListener('mousedown', (e) => { mmDrag = true; mmPan(e); });
 mm.addEventListener('mousemove', (e) => { if (mmDrag) mmPan(e); });
 addEventListener('mouseup', () => { mmDrag = false; });
 
+// Colouring dots by status costs building identity; hovering buys it back. Reuses the
+// existing #tooltip element rather than adding a second tooltip system.
+// Nearest-dot within 5px, not containment: at 0.75px/tile even the 4-tile HUB is 3px, so
+// containment would make most dots unhittable. Ties go to the worst light, matching the
+// worst-last draw order — in a cluster you want to hear about the broken one.
+const LIGHT_RANK = { red: 3, yellow: 2, green: 1 };
+function mmHover(e) {
+  const w = mmToWorld(e);
+  const reach = 5 / MM_SCALE; // 5 screen px, in world tiles
+  let best = null, bestScore = -1;
+  for (const n of state.nodes) {
+    if (hidden(n)) continue;
+    const d = Math.hypot(n.x - w.x, n.y - w.y);
+    if (d > reach) continue;
+    const score = (LIGHT_RANK[S.lightOf(n, ctx.catalog[n.key])] ?? 0) * 1000 - d;
+    if (score > bestScore) { bestScore = score; best = n; }
+  }
+  if (!best || mmDrag) { tip.style.display = 'none'; return; }
+  const def = ctx.catalog[best.key];
+  let html;
+  if (def.type === 'deposit') {
+    html = `<b>${ctx.names[best.res] ?? best.res}</b>` +
+      `<div class="dim">${best.cat} deposit · ${best.purity} (x${best.mult})</div>`;
+  } else {
+    html = `<b>${def.name}</b><div class="dim">${best.status}</div>`;
+    if (['miner', 'machine', 'generator'].includes(def.type)) {
+      html += `<div class="dim">${uptimeText(best)}</div>`;
+    }
+  }
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  tip.style.left = (e.clientX + 14) + 'px';
+  tip.style.top = (e.clientY - 60) + 'px';
+}
+mm.addEventListener('mousemove', mmHover);
+mm.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+
 // -------------------------------------------------------------------- input
 
 function updateTooltip(e) {
