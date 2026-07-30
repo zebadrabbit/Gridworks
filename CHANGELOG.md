@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-07-30 — Onboarding
+
+- **A guided first factory.** On a fresh world, an offer card asks whether you want a walkthrough;
+  accepting shows an advisory panel with five goals — get power, mine ore, smelt it, craft a part,
+  ship it to the HUB. Each goal is an *outcome* checked against the factory itself rather than a
+  scripted action, so it never dictates how you get there and cannot wedge if you build in a
+  different order. It never blocks anything, and Skip or Close dismisses it for good.
+- Progress is **derived, not stored**: the current goal is simply the first unsatisfied predicate,
+  so nothing enters the save and a reload resumes wherever the factory actually is. Only a single
+  completed-or-skipped flag persists, in its own localStorage key so it survives New Map.
+- **A `?` card documents the controls that have no contextual hint** — pan, zoom, delete, pause,
+  speed, wire style, recipes and the minimap. Place-mode and wire-mode gestures are deliberately
+  left out, because the HUD hint already teaches those at the moment they matter.
+- Tests: the five predicates against states that satisfy them and states that do not, specificity
+  between the smelter and constructor goals, a zero shipped entry not counting, and a realistic
+  build satisfying the goals in causal order.
+
 ## 2026-07-30 — Wiring Ergonomics
 
 - **Wire mode is modal.** Releasing the pointer no longer ends a wire: a release and a subsequent

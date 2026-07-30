@@ -6,8 +6,9 @@ resources flow. Long runs are drawn in one gesture — click a port, pan, and cl
 relay poles along the way. Bootstrap power comes from plant deposits feeding a biomass burner (the
 HUB itself has no free power); ship items into the HUB to climb a 7-milestone ladder
 that unlocks buildings and higher belt/pipe marks; splitters and mergers fan wires out
-and back in with per-tick fair-share distribution. The ladder ends at the Space
-Elevator: ship Project Assembly parts through 4 phases to win. Progress keeps
+and back in with per-tick fair-share distribution. New games offer a short guided
+walkthrough to the first shipped item, and a ? card lists the controls. The ladder
+ends at the Space Elevator: ship Project Assembly parts through 4 phases to win. Progress keeps
 accruing while the tab is closed (offline progress, capped at 8h). Every node's
 status lights red/yellow/green, a `⚠ N` HUD chip lists what needs attention and
 pans the camera there on click, and the inspector tracks each machine's lifetime
@@ -69,6 +70,7 @@ Tests also run in CI (GitHub Actions) on every push and pull request.
 
 ## Docs
 
+- `docs/superpowers/specs/2026-07-30-onboarding-design.md` — guided first factory, keybind card
 - `docs/superpowers/specs/2026-07-30-wiring-ergonomics-design.md` — modal wire mode, pole
   chaining
 - `docs/superpowers/specs/2026-07-30-achievements-design.md` — derived achievement registry,

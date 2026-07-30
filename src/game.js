@@ -889,6 +889,27 @@ function refreshAchievements() {
   }
 }
 
+// Only the controls with no contextual hint. Place mode and wire mode already announce
+// themselves in the HUD hint line at the moment they matter, and duplicating them in a static
+// card would rot the first time a gesture changes — as the wire gesture just did.
+const HELP = [
+  ['Pan', 'right-drag, middle-drag, or drag empty ground'],
+  ['Zoom', 'mouse wheel'],
+  ['Delete', 'select, then Del'],
+  ['Pause', 'Space, or the ⏸ button'],
+  ['Speed', 'the 1x button cycles 1x / 2x / 4x'],
+  ['Wire style', 'S — per-wire when a wire is selected'],
+  ['Recipes', 'select a machine, then the Recipe dropdown'],
+  ['Minimap', 'click or drag to jump, hover for detail, − to collapse'],
+];
+
+function buildHelp() {
+  const box = document.getElementById('help');
+  if (box.dataset.built) return;
+  box.dataset.built = '1';
+  box.innerHTML = HELP.map(([k, v]) => `<div class="key"><b>${k}</b><span>${v}</span></div>`).join('');
+}
+
 function refreshTutorial() {
   const box = document.getElementById('tutorial');
   if (tutState !== 'go' || !box.classList.contains('open')) return;
@@ -973,6 +994,10 @@ function toast(msg) {
 async function main() {
   const data = await (await fetch('data/source/satisfactory_data.json')).json();
   ctx = S.buildCtx(data);
+  // tutBox/offer/offerTutorial are hoisted here (rather than declared next to their handlers)
+  // to avoid a temporal dead zone — startFresh(), defined below, calls offerTutorial() before
+  // the tut-yes/tut-no handlers near the bottom of main() would otherwise declare it. See the
+  // tut-yes/tut-no handlers further down for where these are used.
   const tutBox = document.getElementById('tutorial');
   const offer = document.getElementById('tut-offer');
   // offered on a fresh world only — never over an existing factory, which would be an
@@ -1070,23 +1095,40 @@ async function main() {
 
   const alertsBox = document.getElementById('alerts');
   const achBox = document.getElementById('achievements');
-  // both panels anchor to their own chip along the top of the screen, so two open at once
-  // would overlap — opening either closes the other
+  // all three panels anchor to their own chip along the top of the screen, so two open at once
+  // would overlap — opening any one closes the other two
+  const PANELS = ['alerts', 'achievements', 'help'];
+  const closeOthers = (keep) => {
+    for (const id of PANELS) {
+      if (id === keep) continue;
+      const el = document.getElementById(id);
+      el.classList.remove('open');
+      if (id === 'alerts') el.dataset.sig = ''; // force a rebuild on reopen
+    }
+  };
   document.getElementById('hud-alerts').onclick = () => {
-    achBox.classList.remove('open');
+    closeOthers('alerts');
     if (!alertsBox.classList.toggle('open')) alertsBox.dataset.sig = ''; // force a rebuild on reopen
     refreshAlerts();
   };
   document.getElementById('hud-achievements').onclick = () => {
-    alertsBox.classList.remove('open');
-    alertsBox.dataset.sig = ''; // keep the "force a rebuild on reopen" invariant regardless of what closed it
+    closeOthers('achievements');
     achBox.classList.toggle('open');
     // achBox.dataset.sig is deliberately never reset on close (unlike alertsBox): ACHIEVEMENTS
     // has a fixed iteration order, so the sig-guard in refreshAchievements only ever skips a
     // rebuild when the earned set is byte-identical to what's already rendered — never stale.
     refreshAchievements();
   };
+  document.getElementById('hud-help').onclick = () => {
+    closeOthers('help');
+    buildHelp();
+    document.getElementById('help').classList.toggle('open');
+    document.getElementById('help').style.left =
+      Math.min(document.getElementById('hud-help').getBoundingClientRect().left, innerWidth - 308) + 'px';
+  };
 
+  // tutBox/offer were hoisted to the top of main() to avoid a temporal dead zone — see the
+  // comment near their declaration for why.
   document.getElementById('tut-yes').onclick = () => {
     offer.classList.remove('open');
     setTut('go');
