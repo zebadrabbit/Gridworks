@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, weightAt, HUB_X, HUB_Y, START_RADIUS } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, weightAt, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -746,6 +746,36 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.ok(mean(far) - mean(near) >= 0.20,
     `tier 3 spawns further out than tier 0 (near ${mean(near).toFixed(3)}, far ${mean(far).toFixed(3)})`);
   assert.ok(uraniumSeen > 0, 'uranium is still reachable on some seed');
+}
+
+// every seed hands you a playable start inside the HUB's reveal radius
+{
+  const need = { 'iron-ore': 2, 'copper-ore': 1, limestone: 1, leaves: 2, water: 1 };
+  let nitrogenSeen = 0;
+  for (let seed = 2000; seed < 2200; seed++) {
+    const deps = genMap(seed, ctx);
+    const inStart = deps.filter((d) => distT(d.x, d.y) * MAX_DIST <= START_RADIUS);
+    for (const [res, count] of Object.entries(need)) {
+      const got = inStart.filter((d) => d.res === res).length;
+      assert.ok(got >= count,
+        `seed ${seed}: needed ${count} ${res} within ${START_RADIUS} tiles, got ${got}`);
+    }
+    // starters must clear the HUB footprint like every other deposit
+    for (const d of inStart) {
+      assert.ok(Math.abs(HUB_X - d.x) > 8 || Math.abs(HUB_Y - d.y) > 8,
+        `seed ${seed}: ${d.res} at ${d.x},${d.y} overlaps the HUB footprint`);
+    }
+    if (deps.some((d) => d.res === 'nitrogen-gas')) nitrogenSeen++;
+  }
+  // the regression this fixes: nitrogen-gas is in the JSON (category water, weight 40) and
+  // water-extractor has minerCat 'water', but scatter() hardcoded 'water' so it never spawned
+  assert.ok(nitrogenSeen > 0, 'nitrogen-gas can now spawn on some seed');
+
+  // density is unchanged: the bundle comes out of the category budgets, not on top of them
+  const deps = genMap(2222, ctx);
+  assert.ok(deps.length >= 44 && deps.length <= 48,
+    `map still holds ~48 deposits, got ${deps.length}`);
+  assert.equal(START_BUNDLE.length, 7, 'bundle is 7 deposits: 4 mineral, 2 plant, 1 water');
 }
 
 console.log('all sim checks passed');

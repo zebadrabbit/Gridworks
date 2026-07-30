@@ -151,6 +151,16 @@ export const START_RADIUS = 40; // HUB fog reveal radius, and the guaranteed-sta
 // computed rather than hardcoded so it stays correct if the world is ever resized
 export const MAX_DIST = Math.hypot(WORLD_W / 2, WORLD_H / 2);
 
+// A fresh map must be playable: iron and limestone for milestone 1, copper for milestone 2,
+// plants because the biomass burner is the only power bootstrap, and water for coal power.
+// Placed before the general scatter so generation can never fail to provide them.
+export const START_BUNDLE = [
+  ['iron-ore', 'mineral'], ['iron-ore', 'mineral'],
+  ['copper-ore', 'mineral'], ['limestone', 'mineral'],
+  ['leaves', 'plant'], ['leaves', 'plant'],
+  ['water', 'water'],
+];
+
 // distance from the HUB centre (it is a 4-tile building, so centre is +2), normalized to [0,1]
 export function distT(x, y) {
   return Math.min(1, Math.hypot(x - (HUB_X + 2), y - (HUB_Y + 2)) / MAX_DIST);
@@ -215,10 +225,23 @@ export function genMap(seed, ctx) {
       }
     }
   };
-  scatter(28, 'mineral');
+  // starters first, in a ring that clears the HUB footprint but stays inside START_RADIUS
+  for (const [res, cat] of START_BUNDLE) {
+    for (let tries = 0; tries < 400; tries++) {
+      const a = rng() * Math.PI * 2;
+      const rad = 10 + rng() * (START_RADIUS - 10);
+      const x = Math.round(HUB_X + 2 + Math.cos(a) * rad);
+      const y = Math.round(HUB_Y + 2 + Math.sin(a) * rad);
+      if (x < 2 || y < 2 || x > WORLD_W - 4 || y > WORLD_H - 4) continue;
+      if (!free(x, y)) continue;
+      place(res, cat, x, y);
+      break;
+    }
+  }
+  scatter(24, 'mineral');
   scatter(5, 'oil');
-  scatter(7, 'water');
-  scatter(8, 'plant', 'leaves');
+  scatter(6, 'water');
+  scatter(6, 'plant', 'leaves');
   return deposits;
 }
 
