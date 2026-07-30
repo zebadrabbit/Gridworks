@@ -7,6 +7,15 @@ const SAVE_KEY = 'gridworks-save-v2';
 // New Map and save import, which anything stored inside the save would not
 const MAP_KEY = 'gridworks-minimap';
 let mapOpen = localStorage.getItem(MAP_KEY) !== '0';
+// A display preference, not game state: it must survive New Map, or a returning player would be
+// re-taught on every world. Progress itself is derived, so nothing else needs persisting.
+// Three values, not a boolean: absent = never asked, 'go' = accepted and still following along,
+// 'skip' = dismissed for good. Without the middle value, reloading mid-tutorial would silently
+// lose the panel and a later New Map would re-offer, because "accepted" and "never asked" would
+// be the same state.
+const TUT_KEY = 'gridworks-tutorial';
+let tutState = localStorage.getItem(TUT_KEY); // null | 'go' | 'skip'
+const setTut = (v) => { tutState = v; localStorage.setItem(TUT_KEY, v); };
 // Applied at module scope, not only inside main()'s syncMap(), so a collapsed map is correct
 // on the very first paint — main() awaits a fetch before it gets to syncMap(), which would
 // otherwise flash the map open for a frame on every load (the fog toggle had this same bug).
@@ -880,6 +889,31 @@ function refreshAchievements() {
   }
 }
 
+function refreshTutorial() {
+  const box = document.getElementById('tutorial');
+  if (tutState !== 'go' || !box.classList.contains('open')) return;
+  const step = S.tutorialStep(state);
+  const n = S.TUTORIAL.length;
+  const sig = step ? step.id : 'done';
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  if (!step) {
+    box.innerHTML = `<h3>First factory complete</h3>
+      <p>That is the whole loop — mine, smelt, craft, ship. Keep shipping to climb the milestones.</p>
+      <button id="tut-close">Close</button>`;
+  } else {
+    const i = S.TUTORIAL.indexOf(step) + 1;
+    box.innerHTML = `<h3>${step.goal}</h3>
+      <div class="step">Step ${i} of ${n}</div>
+      <p>${step.hint}</p>
+      <button id="tut-close">Close</button>`;
+  }
+  box.querySelector('#tut-close').onclick = () => {
+    box.classList.remove('open');
+    setTut('skip');
+  };
+}
+
 function updateHud() {
   const p = state.power ?? { supply: 0, demand: 0 };
   document.getElementById('hud-power').textContent = `⚡ ${fmt(p.demand)} / ${fmt(p.supply)} MW`;
@@ -939,8 +973,15 @@ function toast(msg) {
 async function main() {
   const data = await (await fetch('data/source/satisfactory_data.json')).json();
   ctx = S.buildCtx(data);
-  state = load() ?? S.newGame((Math.random() * 1e9) | 0, ctx);
+  const tutBox = document.getElementById('tutorial');
+  const offer = document.getElementById('tut-offer');
+  // offered on a fresh world only — never over an existing factory, which would be an
+  // interruption rather than an introduction
+  const offerTutorial = () => { if (!tutState) offer.classList.add('open'); };
+  const loaded = load();
+  state = loaded ?? S.newGame((Math.random() * 1e9) | 0, ctx);
   seedAchievements();
+  if (!loaded) offerTutorial();
   const away = state.savedAt ? (Date.now() - state.savedAt) / 1000 : 0;
   if (away > 60) {
     const before = Object.values(state.shipped).reduce((s, v) => s + v, 0);
@@ -964,7 +1005,7 @@ async function main() {
     state = S.newGame(seed, ctx);
     lastPhase = state.elevator?.phase ?? 0;
     seedAchievements();
-    setMode('idle'); select(null); save(); buildPalette(); updateMilestonePanel();
+    setMode('idle'); select(null); offerTutorial(); save(); buildPalette(); updateMilestonePanel();
   };
   document.getElementById('btn-reset').onclick = () => {
     if (!confirm('Abandon this factory and generate a new map?')) return;
@@ -1046,12 +1087,26 @@ async function main() {
     refreshAchievements();
   };
 
+  document.getElementById('tut-yes').onclick = () => {
+    offer.classList.remove('open');
+    setTut('go');
+    tutBox.classList.add('open');
+    refreshTutorial();
+  };
+  document.getElementById('tut-no').onclick = () => {
+    offer.classList.remove('open');
+    setTut('skip');
+  };
+  // someone who accepted and then reloaded is still mid-tutorial: reopen rather than re-offer
+  if (tutState === 'go') { tutBox.classList.add('open'); refreshTutorial(); }
+
   setInterval(save, 5000);
   addEventListener('beforeunload', save);
   setInterval(updateBuffers, 400);
   setInterval(updateMilestonePanel, 400);
   setInterval(refreshAlerts, 400);
   setInterval(refreshAchievements, 400);
+  setInterval(refreshTutorial, 400);
   updateMilestonePanel();
   refreshAchievements();
 
