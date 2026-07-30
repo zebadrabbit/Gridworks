@@ -161,6 +161,51 @@ export const START_BUNDLE = [
   ['water', 'water'],
 ];
 
+// -------------------------------------------------------------------------
+// Fog is aesthetic: it hides deposits you have not been near, and gates nothing. Tracked at
+// 8-tile granularity so the 240x160 world is 600 flags instead of 38,400 — small enough to
+// live in the save as a plain array, with no Set mirror to fall out of sync.
+export const CHUNK = 8;
+export const CHUNK_W = WORLD_W / CHUNK;
+export const CHUNK_H = WORLD_H / CHUNK;
+export const NODE_RADIUS = 24; // tiles a normal building reveals; the HUB reveals START_RADIUS
+
+export function chunkIndex(tx, ty) {
+  return Math.floor(ty / CHUNK) * CHUNK_W + Math.floor(tx / CHUNK);
+}
+
+// Idempotent and monotone: a chunk is revealed once its centre falls within reach of any
+// building you own. Deposits reveal nothing — they are scenery, not yours.
+// ponytail: called from tick() rather than from every mutation site, so placing, dragging,
+// deleting, loading and offline credit all reveal correctly with no call site to forget.
+// Cost is bounded by each node's own bounding box (~36 chunks at NODE_RADIUS), and the
+// already-revealed short-circuit makes the steady state nearly free. Revisit if node counts
+// ever reach the thousands, at which point reveal-on-change earns its bookkeeping.
+export function revealAll(state, ctx) {
+  if (!Array.isArray(state.explored) || state.explored.length !== CHUNK_W * CHUNK_H) {
+    state.explored = new Array(CHUNK_W * CHUNK_H).fill(0);
+  }
+  for (const n of state.nodes) {
+    const def = ctx.catalog[n.key];
+    if (def.type === 'deposit') continue;
+    const r = def.type === 'hub' ? START_RADIUS : NODE_RADIUS;
+    const nx = n.x + def.size / 2, ny = n.y + def.size / 2;
+    const x0 = Math.max(0, Math.floor((nx - r) / CHUNK));
+    const x1 = Math.min(CHUNK_W - 1, Math.floor((nx + r) / CHUNK));
+    const y0 = Math.max(0, Math.floor((ny - r) / CHUNK));
+    const y1 = Math.min(CHUNK_H - 1, Math.floor((ny + r) / CHUNK));
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cxi = x0; cxi <= x1; cxi++) {
+        const i = cy * CHUNK_W + cxi;
+        if (state.explored[i]) continue;
+        if (Math.hypot(cxi * CHUNK + CHUNK / 2 - nx, cy * CHUNK + CHUNK / 2 - ny) <= r) {
+          state.explored[i] = 1;
+        }
+      }
+    }
+  }
+}
+
 // distance from the HUB centre (it is a 4-tile building, so centre is +2), normalized to [0,1]
 export function distT(x, y) {
   return Math.min(1, Math.hypot(x - (HUB_X + 2), y - (HUB_Y + 2)) / MAX_DIST);
@@ -266,6 +311,7 @@ export function newGame(seed, ctx) {
   for (const d of genMap(seed, ctx)) addDeposit(state, d.res, d.cat, d.purity, d.mult, d.x, d.y);
   const hub = addNode(state, 'the-hub', HUB_X, HUB_Y, ctx);
   hub.fixed = true;
+  revealAll(state, ctx); // so a fresh map renders its start area on the very first frame
   return state;
 }
 
@@ -446,6 +492,9 @@ export function normalizeSave(raw, ctx) {
   s.pipeMark ??= 0;
   s.shipped ??= {};
   s.elevator ??= { phase: 0, progress: {} };
+  if (!Array.isArray(s.explored) || s.explored.length !== CHUNK_W * CHUNK_H) {
+    s.explored = new Array(CHUNK_W * CHUNK_H).fill(0);
+  }
   s.nodes = s.nodes.filter((n) => ctx.catalog[n.key]);
   const ids = new Set(s.nodes.map((n) => n.id));
   s.wires = s.wires.filter((w) => ids.has(w.a.n) && ids.has(w.b.n));
@@ -528,6 +577,7 @@ function supplying(node, def) {
 
 export function tick(state, dt, ctx) {
   const nets = powerNetworks(state, ctx);
+  revealAll(state, ctx);
   const ratioOf = (node) => {
     const def = ctx.catalog[node.key];
     if (!(def.draw > 0)) return 1;
