@@ -1,7 +1,7 @@
 // sim.js — pure game logic (no DOM). Source of truth: data/source/satisfactory_data.json
 export const TILE = 32;
-export const WORLD_W = 240;
-export const WORLD_H = 160;
+export const WORLD_W = 720;
+export const WORLD_H = 480;
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -177,9 +177,12 @@ export function tierFactor(res, t) {
 }
 // Candidate positions each scattered deposit chooses between, and the score floor an
 // out-of-band candidate keeps (see scatter). The floor is what holds the deposit count up:
-// measured over 3,000 seeds, POS_FLOOR = 0 drops the mean map from 48 deposits to 42.2 with a
-// worst case of 36 — under the tests' >= 40 assertion — because tier 0 wants ~24 deposits in a
-// disc that only fits ~15. Any value above 0 fixes that equally; smaller is sharper tiering.
+// at 720x480, tier 0's disc has 9x its former area, so the shortfall this covers is far
+// smaller than it was at 240x160 (was: 3,000 seeds, mean 42.2, worst case 36) — but it has
+// not gone to zero. Measured over 50,000 seeds at the current world size, POS_FLOOR = 0 still
+// drops the mean map from 48 deposits to 47.99 with a worst case of 46 (seed 116353), because
+// tier 0 wants ~24 deposits and can still occasionally run out of in-band room. Any value
+// above 0 fixes that; smaller is sharper tiering.
 const POS_TRIES = 40;
 const POS_FLOOR = 0.005;
 

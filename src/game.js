@@ -504,7 +504,9 @@ addEventListener('mouseup', () => {
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const f = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-  const z = Math.min(2.5, Math.max(0.2, cam.z * f));
+  // 0.08, not 0.2: the minimap is the real overview tool; this floor only stops panning
+  // out from hitting a wall mid-map (720 * TILE * 0.08 = 1843px fits a 1920px viewport).
+  const z = Math.min(2.5, Math.max(0.08, cam.z * f));
   cam.x = e.offsetX - (e.offsetX - cam.x) * (z / cam.z);
   cam.y = e.offsetY - (e.offsetY - cam.y) * (z / cam.z);
   cam.z = z;

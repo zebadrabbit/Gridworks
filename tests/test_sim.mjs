@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -693,8 +693,10 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   // distT measures from the HUB centre, not its corner
   assert.equal(distT(HUB_X + 2, HUB_Y + 2), 0, 'hub centre is t=0');
   assert.ok(distT(0, 0) > 0.99, `map corner is t~1, got ${distT(0, 0)}`);
-  assert.ok(distT(HUB_X + 2 + 40, HUB_Y + 2) > 0.2 && distT(HUB_X + 2 + 40, HUB_Y + 2) < 0.3,
-    '40 tiles out lands in the tier-1 band');
+  // 120, not 40: the world is 3x its old linear size, and this checks an absolute tile
+  // offset against a normalized band, so it has to scale with WORLD_W/WORLD_H like HUB_X did.
+  assert.ok(distT(HUB_X + 2 + 120, HUB_Y + 2) > 0.2 && distT(HUB_X + 2 + 120, HUB_Y + 2) < 0.3,
+    '120 tiles out lands in the tier-1 band');
 
   // tierFactor takes a key string, so it also works for leaves, which is an item and has
   // no entry in data.resources at all
@@ -868,6 +870,36 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.ok(deps.length >= 44 && deps.length <= 48,
     `map still holds ~48 deposits, got ${deps.length}`);
   assert.equal(START_BUNDLE.length, 7, 'bundle is 7 deposits: 4 mineral, 2 plant, 1 water');
+}
+
+// the world is 720x480: same 48 deposits, spread nine times further
+{
+  assert.equal(WORLD_W, 720);
+  assert.equal(WORLD_H, 480);
+  assert.equal(WORLD_W / WORLD_H, 1.5, 'stays 3:2 so the minimap needs no reshaping');
+  assert.equal(HUB_X, 358, 'hub recentres with the world');
+  assert.equal(HUB_Y, 238);
+  assert.ok(MAX_DIST > 430 && MAX_DIST < 435, `MAX_DIST rescales, got ${MAX_DIST}`);
+  assert.equal(START_RADIUS, 40, 'the start band stays tight while the map grows');
+
+  // deposits still all place, and spread further apart than on the old map
+  const nn = [];
+  for (let seed = 6000; seed < 6100; seed++) {
+    const deps = genMap(seed, ctx);
+    assert.equal(deps.length, 48, `seed ${seed} placed ${deps.length} deposits, expected 48`);
+    assert.equal(deps.filter((d) => d.start).length, START_BUNDLE.length,
+      `seed ${seed} placed the wrong number of starters`);
+    for (const a of deps) {
+      let m = Infinity;
+      for (const b of deps) if (b !== a) m = Math.min(m, Math.hypot(a.x - b.x, a.y - b.y));
+      nn.push(m);
+    }
+  }
+  const median = nn.sort((a, b) => a - b)[Math.floor(nn.length / 2)];
+  assert.ok(median > 24, `deposits spread out: median nearest-neighbour ${median}, expected > 24`);
+
+  // the hard floor is now a long way out
+  assert.ok(0.6 * MAX_DIST > 250, `uranium floor is ~260 tiles, got ${(0.6 * MAX_DIST).toFixed(0)}`);
 }
 
 console.log('all sim checks passed');
