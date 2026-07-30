@@ -82,3 +82,7 @@ aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
 #alerts .alert.warn { color: #f4d03f; }
 #alerts .alert:hover { background: #17324a; }
 
+#minimap { position: fixed; right: 260px; bottom: 10px; width: 180px; height: 120px;
+  background: rgba(10,13,20,.92); border: 1px solid #1d2733; border-radius: 6px;
+  z-index: 20; cursor: crosshair; }
+

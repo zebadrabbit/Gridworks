@@ -153,6 +153,7 @@ function draw(now) {
   for (const n of state.nodes) drawNode(n);
   if (ui.mode === 'place' && ui.placeKey) drawGhost();
   cx.restore();
+  drawMinimap();
 }
 
 function drawGrid() {
@@ -305,6 +306,64 @@ function drawGhost() {
   cx.globalAlpha = 1;
   ui.hint = chk.ok ? `click to place ${def.name} · shift = multi · esc = cancel` : (chk.reason ?? '');
 }
+
+// ---------------------------------------------------------------- minimap
+
+const mm = document.getElementById('minimap');
+const mcx = mm.getContext('2d');
+const MM_SCALE = 180 / S.WORLD_W; // 0.75 px per tile; 240x160 world -> 180x120 canvas
+
+// screen coords of a minimap event, in world tiles
+function mmToWorld(e) {
+  return { x: e.offsetX / MM_SCALE, y: e.offsetY / MM_SCALE };
+}
+
+function drawMinimap() {
+  mcx.clearRect(0, 0, mm.width, mm.height);
+  // explored chunks lift out of the background; with fog off, the whole world is lit
+  mcx.fillStyle = 'rgba(77,216,255,0.07)';
+  for (let i = 0; i < S.CHUNK_W * S.CHUNK_H; i++) {
+    if (fogOn && !state.explored?.[i]) continue;
+    const cxi = i % S.CHUNK_W, cy = Math.floor(i / S.CHUNK_W);
+    mcx.fillRect(cxi * S.CHUNK * MM_SCALE, cy * S.CHUNK * MM_SCALE,
+      S.CHUNK * MM_SCALE, S.CHUNK * MM_SCALE);
+  }
+  // deposits, then buildings worst-last so one red machine is never painted over by a
+  // healthy neighbour — clusters overlap at this scale, so draw order is the whole signal
+  const dot = (n, color, size) => {
+    mcx.fillStyle = color;
+    mcx.fillRect(n.x * MM_SCALE - size / 2, n.y * MM_SCALE - size / 2, size, size);
+  };
+  for (const n of state.nodes) {
+    const def = ctx.catalog[n.key];
+    if (def.type !== 'deposit' || hidden(n)) continue;
+    dot(n, DEP_STYLE[n.cat].edge, 2);
+  }
+  for (const want of [null, 'green', 'yellow', 'red']) {
+    for (const n of state.nodes) {
+      const def = ctx.catalog[n.key];
+      if (def.type === 'deposit') continue;
+      const light = S.lightOf(n, def);
+      if (light !== want) continue;
+      dot(n, LIGHT_COLOR[light] ?? TYPE_COLOR[def.type] ?? '#4dd8ff', def.type === 'hub' ? 4 : 3);
+    }
+  }
+  // viewport rectangle
+  const tl = toWorld(0, 0), br = toWorld(canvas.width, canvas.height);
+  mcx.strokeStyle = '#ffffff88'; mcx.lineWidth = 1;
+  mcx.strokeRect(tl.x * MM_SCALE, tl.y * MM_SCALE,
+    (br.x - tl.x) * MM_SCALE, (br.y - tl.y) * MM_SCALE);
+}
+
+let mmDrag = false;
+const mmPan = (e) => {
+  const w = mmToWorld(e);
+  cam.x = innerWidth / 2 - w.x * T * cam.z;
+  cam.y = innerHeight / 2 - w.y * T * cam.z;
+};
+mm.addEventListener('mousedown', (e) => { mmDrag = true; mmPan(e); });
+mm.addEventListener('mousemove', (e) => { if (mmDrag) mmPan(e); });
+addEventListener('mouseup', () => { mmDrag = false; });
 
 // -------------------------------------------------------------------- input
 
