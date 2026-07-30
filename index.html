@@ -25,10 +25,15 @@
   <button id="btn-reset">New Map</button>
 </header>
 <aside id="palette"></aside>
-<aside id="inspector"><div class="dim">Nothing selected</div></aside>
+<aside id="inspector">
+  <div id="inspector-body"><div class="dim">Nothing selected</div></div>
+  <div id="inspector-map">
+    <div class="map-head"><span>Map</span><button id="btn-map">−</button></div>
+    <canvas id="minimap" width="228" height="152"></canvas>
+  </div>
+</aside>
 <aside id="milestone"></aside>
 <div id="alerts"></div>
-<canvas id="minimap" width="180" height="120"></canvas>
 <script type="module" src="src/game.js"></script>
 </body>
 </html>

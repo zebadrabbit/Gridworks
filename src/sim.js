@@ -224,7 +224,7 @@ export function genMap(seed, ctx) {
   // candidates by weighted reservoir sampling, with each candidate's weight being how well it
   // suits *this* resource's tier. Uniform x/y candidates are deliberate: sampling a target
   // radius instead would cluster points near the hub (area grows with radius), would need
-  // out-of-bounds rejection once t * MAX_DIST exceeds the 80-tile map half-height, and would
+  // out-of-bounds rejection once t * MAX_DIST exceeds the 240-tile map half-height, and would
   // have to cope with tier 0's band straddling t=0. Scoring uniform candidates has none of
   // those failure modes and cannot land off-map.
   //

@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-07-29 — Bigger World
+
+- **Fog of war removed.** It was meant to make the map feel like a frontier, but revealing it
+  was free: power poles are unlocked from the start, cost nothing, and reveal a 24-tile radius
+  each, and dragging any building across the map revealed the whole path. A concealment mechanic
+  that costs nothing to defeat is a chore with a workaround, not atmosphere. Out with it go
+  `state.explored`, `revealAll`, the `_fog` cache, the chunk grid and the 🌫 toggle — which also
+  reclaims roughly 11% of an 8-hour offline catch-up, since the sim tracked explored chunks every
+  tick whether fog was switched on or not.
+- **The world is now 720×480** — nine times the area, with the same 48 deposits. Measured over
+  300 seeds, median spacing between deposits goes from 17 to 30 tiles and the 90th percentile
+  from 26 to 81, while the uranium hard floor moves from 87 tiles out to 260. Because each tier
+  concentrates into its own band, the area around the HUB stays workable while the frontier
+  genuinely opens up. Minimum zoom drops to 0.08 so the whole map fits on screen for orientation.
+- **The minimap is docked** into the bottom of the inspector column at 228×152, with a `−`/`+`
+  collapse whose state persists. It previously floated bottom-right and overlapped the milestone
+  panel below ~880px of window width; in the flow, that whole class of collision is gone.
+- Tests: world dimensions and the recentred HUB, all 48 deposits still placing on every seed with
+  the full starter bundle, deposits measurably further apart, and the hard floor at its new
+  distance. The fog test block is deleted with the feature.
+
 ## 2026-07-29 — The World
 
 - **Ore tiered by distance**: a resource→tier table in sim.js, ordered by when the existing

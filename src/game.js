@@ -3,6 +3,10 @@ import * as S from './sim.js';
 
 const T = S.TILE;
 const SAVE_KEY = 'gridworks-save-v2';
+// display preference, so it lives in its own key rather than the save — it must survive
+// New Map and save import, which anything stored inside the save would not
+const MAP_KEY = 'gridworks-minimap';
+let mapOpen = localStorage.getItem(MAP_KEY) !== '0';
 const KIND_COLOR = { item: '#58d68d', fluid: '#5dade2', power: '#f4d03f', resource: '#e17055' };
 const TYPE_COLOR = {
   miner: '#f5a623', machine: '#4dd8ff', store: '#a29bfe',
@@ -300,7 +304,7 @@ function drawGhost() {
 
 const mm = document.getElementById('minimap');
 const mcx = mm.getContext('2d');
-const MM_SCALE = 180 / S.WORLD_W; // 0.75 px per tile; 240x160 world -> 180x120 canvas
+const MM_SCALE = 228 / S.WORLD_W; // ~0.317 px per tile; 720x480 world -> 228x152 canvas
 
 // screen coords of a minimap event, in world tiles
 function mmToWorld(e) {
@@ -308,6 +312,7 @@ function mmToWorld(e) {
 }
 
 function drawMinimap() {
+  if (!mapOpen) return;
   mcx.clearRect(0, 0, mm.width, mm.height);
   // deposits, then buildings worst-last so one red machine is never painted over by a
   // healthy neighbour — clusters overlap at this scale, so draw order is the whole signal
@@ -611,7 +616,7 @@ function uptimeText(n) {
 }
 
 function refreshInspector() {
-  const box = document.getElementById('inspector');
+  const box = document.getElementById('inspector-body');
   if (!ui.sel) { box.innerHTML = '<div class="dim">Nothing selected</div>'; return; }
 
   if (ui.sel.type === 'wire') {
@@ -887,6 +892,19 @@ async function main() {
   speedBtn.onclick = () => {
     ui.speed = ui.speed >= 4 ? 1 : ui.speed * 2;
     speedBtn.textContent = ui.speed + 'x';
+  };
+
+  const mapBox = document.getElementById('inspector-map');
+  const mapBtn = document.getElementById('btn-map');
+  const syncMap = () => {
+    mapBox.classList.toggle('collapsed', !mapOpen);
+    mapBtn.textContent = mapOpen ? '−' : '+';
+  };
+  syncMap();
+  mapBtn.onclick = () => {
+    mapOpen = !mapOpen;
+    localStorage.setItem(MAP_KEY, mapOpen ? '1' : '0');
+    syncMap();
   };
 
   addEventListener('keydown', (e) => {
