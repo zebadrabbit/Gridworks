@@ -28,9 +28,9 @@ only the controls that have no contextual hint.
 
 ## Steps are outcomes, not scripted actions
 
-Node `status` already encodes whole dependency chains. A miner reporting `mining` is
-simultaneously proof that it is wired to a deposit *and* that it has power — two dependencies
-verified by one predicate. Leaning on that collapses the six dependencies into five goals:
+Each goal is a single predicate over state the game already keeps, so the six dependencies
+collapse into five goals. A miner having produced anything is simultaneously proof that it was
+wired to a deposit *and* powered — two dependencies verified by one number:
 
 | # | Goal | Predicate | What it forces the player to discover |
 |---|---|---|---|
@@ -75,34 +75,39 @@ testable in the only tested file, and adding nothing to the save.
 A player who completes a later goal early still sees the earlier one, which is correct: if you
 somehow ship an item before your smelter runs, you skipped nothing you needed.
 
-## One boolean, in localStorage
+## One marker, in localStorage
 
-Whether onboarding has been completed or skipped lives in its own `localStorage` key, not the
-save. It is a display preference that must survive New Map — you should not be re-taught on your
-fifth world — which is the same reasoning that put the fog toggle and the minimap collapse
-outside the save.
+The player's decision lives in its own `localStorage` key, not the save. It is a display
+preference that must survive New Map — you should not be re-taught on your fifth world — which is
+the same reasoning that put the fog toggle and the minimap collapse outside the save.
+
+It holds **three** values, not a boolean: absent (never asked), `'go'` (accepted and still
+following), `'skip'` (dismissed). A boolean cannot express this, because "accepted" and "never
+asked" would be the same state — so reloading mid-tutorial would silently lose the panel, and a
+later New Map would re-offer.
 
 Nothing else is persisted. Progress is derived, so a reload mid-tutorial resumes exactly where the
 factory actually is.
 
 ## The offer
 
-On a world where that flag is unset, a small centred card:
+On a world where the marker is absent, a small centred card:
 
 > **New here?** I can walk you through building your first factory.
 > **[ Show me ]  [ Skip ]**
 
 Shown on first-ever load and after New Map. **Never over an existing save** — a returning player
 with a running factory is not a new player, and interrupting them would be exactly the friction
-this project avoids. Either button sets the flag; **Skip** also dismisses permanently.
+this project avoids. **Show me** sets `'go'`; **Skip** sets `'skip'` and dismisses permanently.
 
 ## The panel
 
 Once accepted, a dismissible card shows the current goal and its hint, updating as predicates
 pass. It is **advisory and never blocking**: the player can ignore it, build ahead of it, or close
-it at any point. Closing sets the flag.
+it at any point. Closing sets `'skip'`.
 
-When the last goal passes, the card congratulates and offers to close itself.
+When the last goal passes the card congratulates, and sets `'skip'` as it renders so it appears
+once rather than returning on every later load.
 
 ## The keybind card
 
@@ -137,8 +142,14 @@ small helper rather than three copies of two `classList.remove` calls.
 
 - Each of the five predicates against a synthetic state that satisfies it and one that does not.
 - `tutorialStep` on a fresh game returns the first step, and on a fully-built state returns `null`.
-- The steps are satisfied **in order** by a realistic build: a state that passes step *n* also
-  passes every step before it, so the sequence is genuinely causal rather than arbitrary.
+- The steps are satisfied **in order** by a realistic build, walking a factory forward one goal at
+  a time. Note this is the ordinary path, not a guarantee: a Constructor running
+  `biomass-from-leaves` satisfies step 4 with no miner in existence, which is why the panel simply
+  shows the earliest unsatisfied goal rather than assuming earlier ones passed.
+- Each narrowing is pinned, because the code is correct but nothing else holds it correct: a
+  Storage Container lights green on its first tick with no power at all, so step 1 must stay
+  specific to the burner, and a Constructor can produce with no miner, so step 2 must stay
+  specific to miners.
 - Ids are unique and every entry has non-empty `goal` and `hint` text, so a malformed entry cannot
   reach the UI.
 
