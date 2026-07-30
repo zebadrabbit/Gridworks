@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-29 — Relay Poles
+
+- **Power, Conveyor and Pipe Poles**: 1-tile relay nodes, one port in and one out, unlocked
+  from the start. They exist because the camera cannot pan while a wire drag is held, so a
+  cross-map run previously meant zooming out until both ports fit on screen; now it is built
+  as per-screen hops. No new sim code was needed — the existing `logistic` type already models
+  a 1-in/1-out passthrough, and power poles join networks for free because `canConnect` treats
+  power wires as undirected and `powerNetworks` unions across any power wire regardless of node
+  type. Poles draw and supply nothing, stay out of the supply/demand totals, and never raise
+  an alert.
+- Tests: a pole chain relays power to a distant machine with no loss and no effect on grid
+  accounting; items and fluids are conserved across a pole at unchanged throughput; each pole
+  rejects the wire kinds it does not carry.
+
 ## 2026-07-29 — Know Your Factory
 
 - **Status lights**: a new pure `lightOf()` in sim.js maps each node's existing status

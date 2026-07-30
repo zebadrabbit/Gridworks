@@ -602,4 +602,82 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
     `made grows by only the amount that fit, got ${m.made - madeBefore}`);
 }
 
+// poles: 1-in/1-out relays for each wire kind, so a cross-map run can be built as hops
+{
+  // all three are available from the start — they solve a pain that exists on the first run
+  const fresh = newGame(53, ctx);
+  for (const k of ['power-pole', 'conveyor-pole', 'pipe-pole']) {
+    assert.ok(isUnlocked(fresh, k), k + ' unlocked from the start');
+    assert.equal(ctx.catalog[k].size, 1, k + ' is a 1-tile node');
+    assert.equal(ctx.catalog[k].draw, 0, k + ' draws no power');
+    assert.ok(!ctx.catalog[k].powerOut, k + ' supplies no power');
+  }
+
+  // power: a generator reaches a distant machine through a chain of poles, and the poles
+  // themselves stay out of the supply/demand accounting
+  {
+    const s = newGame(53, ctx);
+    s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+    const d = addDeposit(s, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+    const m = addNode(s, 'miner-mk1', 10, 5, ctx);
+    const b = addNode(s, 'biomass-burner', 60, 60, ctx); // far away
+    b.buf.wood = 50;
+    const p1 = addNode(s, 'power-pole', 30, 30, ctx);
+    const p2 = addNode(s, 'power-pole', 45, 45, ctx);
+    assert.ok(addWire(s, d, 'out0', m, 'res0', ctx));
+    assert.ok(addWire(s, b, 'pout', p1, 'in0', ctx), 'generator into pole');
+    assert.ok(addWire(s, p1, 'out0', p2, 'in0', ctx), 'pole chains to pole');
+    assert.ok(addWire(s, p2, 'out0', m, 'pin', ctx), 'pole into machine');
+    tick(s, 0.1, ctx);
+    assert.equal(m.status, 'mining', 'power reaches the miner through two poles');
+    assert.equal(m.ratio, 1, 'poles add no loss');
+    assert.equal(s.power.demand, ctx.catalog['miner-mk1'].draw, 'poles add no demand');
+    assert.equal(s.power.supply, 30, 'poles add no supply');
+    assert.equal(p1._net, undefined, 'poles never join the net accounting, so never alert');
+    // a pole only accepts its own wire kind
+    const box = addNode(s, 'storage-container', 20, 20, ctx);
+    assert.equal(addWire(s, box, 'out0', p1, 'in0', ctx), null, 'item wire rejected by power pole');
+  }
+
+  // conveyor: items survive the hop, and throughput is unchanged from a direct belt
+  {
+    const s = newGame(55, ctx);
+    s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+    const src = addNode(s, 'storage-container', 5, 5, ctx);
+    src.buf['iron-ore'] = 300;
+    const pole = addNode(s, 'conveyor-pole', 10, 5, ctx);
+    const sink = addNode(s, 'storage-container', 15, 5, ctx);
+    assert.ok(addWire(s, src, 'out0', pole, 'in0', ctx), 'container into conveyor pole');
+    assert.ok(addWire(s, pole, 'out0', sink, 'in0', ctx), 'conveyor pole into container');
+    for (let i = 0; i < 1200; i++) tick(s, 0.1, ctx); // 120s @ belt1 60/min
+    const got = sink.buf['iron-ore'] ?? 0;
+    assert.ok(got > 100 && got <= 121, `pole passes ~60/min, got ${got}`);
+    const total = (src.buf['iron-ore'] ?? 0) + (pole.buf['iron-ore'] ?? 0) + got;
+    assert.ok(Math.abs(total - 300) < 1, `items conserved through the pole, got ${total}`);
+    assert.equal(pole.status, 'ok');
+    assert.equal(lightOf(pole, ctx.catalog['conveyor-pole']), null, 'relays get no status light');
+    assert.equal(addWire(s, src, 'out0', addNode(s, 'pipe-pole', 20, 5, ctx), 'in0', ctx), null,
+      'item wire rejected by pipe pole');
+  }
+
+  // pipe: fluid survives the hop
+  {
+    const s = newGame(57, ctx);
+    s.unlocked.buildings = Object.keys(ctx.catalog); // extractor/buffer are milestone rewards
+    s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+    const wdep = addDeposit(s, 'water', 'water', 'normal', 1, 5, 5);
+    const pump = addNode(s, 'water-extractor', 10, 5, ctx);
+    const b = addNode(s, 'biomass-burner', 10, 12, ctx);
+    b.buf.wood = 50;
+    const pole = addNode(s, 'pipe-pole', 16, 5, ctx);
+    const tank = addNode(s, 'fluid-buffer', 20, 5, ctx);
+    assert.ok(addWire(s, wdep, 'out0', pump, 'res0', ctx));
+    assert.ok(addWire(s, b, 'pout', pump, 'pin', ctx));
+    assert.ok(addWire(s, pump, 'out0', pole, 'in0', ctx), 'extractor into pipe pole');
+    assert.ok(addWire(s, pole, 'out0', tank, 'in0', ctx), 'pipe pole into tank');
+    for (let i = 0; i < 1200; i++) tick(s, 0.1, ctx); // 120s
+    assert.ok((tank.buf.water ?? 0) > 100, `fluid passes the pole, got ${tank.buf.water}`);
+  }
+}
+
 console.log('all sim checks passed');

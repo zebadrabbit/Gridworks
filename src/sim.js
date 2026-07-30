@@ -32,6 +32,14 @@ const EXTRA_DEFS = {
   merger: { name: 'Merger', type: 'logistic', lkind: 'item', nIn: 3, nOut: 1, size: 1 },
   'pipe-splitter': { name: 'Pipe Splitter', type: 'logistic', lkind: 'fluid', nIn: 1, nOut: 3, size: 1 },
   'pipe-merger': { name: 'Pipe Merger', type: 'logistic', lkind: 'fluid', nIn: 3, nOut: 1, size: 1 },
+  // ponytail: poles are pure 1-in/1-out relays, so the existing logistic type covers all
+  // three with no new sim code. They exist because you cannot pan while dragging a wire, so
+  // a cross-map run has to be built as per-screen hops. lkind 'power' works because
+  // canConnect treats power wires as undirected and powerNetworks unions across any power
+  // wire, so a pole joins the two sides without drawing or supplying anything itself.
+  'power-pole': { name: 'Power Pole', type: 'logistic', lkind: 'power', nIn: 1, nOut: 1, size: 1 },
+  'conveyor-pole': { name: 'Conveyor Pole', type: 'logistic', lkind: 'item', nIn: 1, nOut: 1, size: 1 },
+  'pipe-pole': { name: 'Pipe Pole', type: 'logistic', lkind: 'fluid', nIn: 1, nOut: 1, size: 1 },
 };
 // Buildings whose data lists power:0 but which do draw variable power in-game.
 const DRAW_OVERRIDE = { accelerator: 500, converter: 250, 'quantum-encoder': 1000 };
@@ -39,7 +47,8 @@ const DRAW_OVERRIDE = { accelerator: 500, converter: 250, 'quantum-encoder': 100
 // ponytail: hand-rolled milestone ladder shaped after the wiki's early tiers; costs are
 // idle-scaled guesses, tune freely. Item keys are validated against the JSON at load.
 export const START_UNLOCKED = ['miner-mk1', 'smelter', 'constructor', 'biomass-burner',
-  'storage-container', 'splitter', 'merger', 'pipe-splitter', 'pipe-merger', 'the-hub'];
+  'storage-container', 'splitter', 'merger', 'pipe-splitter', 'pipe-merger', 'the-hub',
+  'power-pole', 'conveyor-pole', 'pipe-pole'];
 export const MILESTONES = [
   { name: 'Part Assembly', cost: { 'iron-plate': 100, 'iron-rod': 100 },
     rewards: { buildings: ['assembler'], beltMark: 1 } },
