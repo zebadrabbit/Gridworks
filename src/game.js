@@ -290,11 +290,12 @@ function drawNode(n) {
     cx.fillText(Math.floor(total), r.x + r.w / 2, r.y + r.h - 8);
   }
 
-  for (const port of S.portsOf(n, ctx)) drawPort(n, port, def);
+  const ports = S.portsOf(n, ctx);
+  for (const port of ports) drawPort(n, port, def);
   if (def.type !== 'logistic') {
     const maxW = r.w * 0.45;
     cx.font = '8px monospace';
-    for (const port of S.portsOf(n, ctx)) {
+    for (const port of ports) {
       if (port.side === 'N') continue;
       const { res, flow, attached } = portLink(n, port);
       if (!attached) continue;
