@@ -964,7 +964,7 @@ function updateHud() {
 
 function save() {
   state.savedAt = Date.now();
-  localStorage.setItem(SAVE_KEY, JSON.stringify(state, (k, v) => (k === '_net' ? undefined : v)));
+  localStorage.setItem(SAVE_KEY, JSON.stringify(state, (k, v) => (k === '_net' || k === 'hist' || k === 'hMade' ? undefined : v)));
 }
 function load() {
   try {

@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H, ACHIEVEMENTS, earned, TUTORIAL, tutorialStep } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H, ACHIEVEMENTS, earned, TUTORIAL, tutorialStep, HIST_LEN } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -1164,6 +1164,25 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   // Even though miner status has regressed, tutorialStep must not regress—it uses counters
   const currentStep = tutorialStep(s2);
   assert.ok(!currentStep || currentStep.id !== TUTORIAL[1].id, 'tutorial progress does not regress to mining despite status regression');
+}
+
+// ---- history sampler: one sample per second, 60 max, live-only
+{
+  const s = newGame(7, ctx);
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const box = addNode(s, 'storage-container', 10, 10, ctx);
+  box.buf = { 'iron-ore': 1200 }; // half of cap 2400
+  const h = s.nodes.find((n) => n.key === 'the-hub');
+  for (let i = 0; i < 6; i++) tick(s, 0.5, ctx); // 3 seconds
+  assert.equal(box.hist.length, 3, 'one sample per second');
+  assert.ok(Math.abs(box.hist[0] - 0.5) < 1e-9, 'store samples fill ratio');
+  assert.equal(h.hist.length, 3, 'hub samples too');
+  assert.equal(h.hist[0], 0, 'hub net power is supply - demand');
+  for (let i = 0; i < 200; i++) tick(s, 1, ctx);
+  assert.equal(box.hist.length, HIST_LEN, 'ring caps at HIST_LEN');
+  assert.equal(JSON.stringify(normalizeSave(JSON.parse(JSON.stringify(s)), ctx)).includes('"hist"'), true,
+    'hist survives a plain clone (the save replacer in game.js strips it, not the sim)');
 }
 
 console.log('all sim checks passed');

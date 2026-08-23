@@ -576,6 +576,7 @@ export const OFFLINE_STEP = 0.5;
 // Simulate `seconds` of away time (clamped to OFFLINE_CAP); returns seconds simulated.
 export function simulateOffline(state, seconds, ctx) {
   const steps = Math.floor(Math.min(Math.max(0, seconds), OFFLINE_CAP) / OFFLINE_STEP);
+  // ponytail: offline ticks sample too; fine, it seeds the graph
   for (let i = 0; i < steps; i++) tick(state, OFFLINE_STEP, ctx);
   return steps * OFFLINE_STEP;
 }
@@ -607,6 +608,25 @@ export function lightOf(node, def) {
 const BUF_CAP = 100; // per-resource cap for miner/machine/generator buffers
 
 function bufTotal(buf) { return Object.values(buf).reduce((s, v) => s + v, 0); }
+
+export const HIST_LEN = 60;
+
+// One number per node per second for the inspector/tooltip sparkline. Live-only: game.js
+// strips `hist` and `hMade` on save, so old saves simply start with an empty graph.
+const HIST_TYPES = new Set(['store', 'generator', 'miner', 'machine', 'hub']);
+function sampleHistory(state, ctx) {
+  for (const node of state.nodes) {
+    const def = ctx.catalog[node.key];
+    if (!HIST_TYPES.has(def.type)) continue;
+    let v;
+    if (def.type === 'store') v = bufTotal(node.buf) / def.cap;
+    else if (def.type === 'generator') v = node.status === 'generating' ? def.powerOut : 0;
+    else if (def.type === 'hub') v = state.power.supply - state.power.demand;
+    else { v = (node.made ?? 0) - (node.hMade ?? 0); node.hMade = node.made ?? 0; }
+    (node.hist ??= []).push(v);
+    if (node.hist.length > HIST_LEN) node.hist.shift();
+  }
+}
 
 function powerNetworks(state, ctx) {
   const parent = {};
@@ -782,5 +802,8 @@ export function tick(state, dt, ctx) {
     } else dst.buf[res] = (dst.buf[res] ?? 0) + amt;
     wire.flow = amt / dt;
   }
+  // sample when state.time crosses a whole second; dt is 0.5 live and coarse offline,
+  // so "crosses" rather than "equals"
+  if (Math.floor(state.time + dt) > Math.floor(state.time)) sampleHistory(state, ctx);
   state.time += dt;
 }
