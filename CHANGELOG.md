@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-08-23 — Tile I/O layers
+
+- **Layered port layout.** Inputs move to the upper-left, outputs to the lower-right, and the
+  progress bar stays centred between them, replacing the old single stacked column. Wires
+  attached to a node re-route to the new port positions automatically; no save data changes.
+- **Kind glyphs in every port ring.** Each port ring now strokes the matching item/fluid/power/ore
+  glyph inside it, drawn from the same icon set as the inspector, instead of the old plain dot, so
+  a tile's inputs and outputs read at a glance without opening the inspector.
+- **Port names, rates, and the product line.** Any port with an attached wire now shows the
+  resource name and its flow in `X/min` beside the ring, and a running machine's status line
+  reads `→ Product` instead of a generic status word.
+
 ## 2026-08-23 — Visual language
 
 - **Per-kind icons in the inspector and tooltips.** Six inline SVG glyphs—item,
