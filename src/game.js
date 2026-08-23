@@ -93,13 +93,19 @@ function portAt(wx, wy) {
   // Below this zoom, ports on adjacent sides sit closer together on screen than the 9px hit
   // threshold below, so hits stop being distinguishable and a click means "pan", not "wire".
   if (cam.z < 0.25) return null;
+  // Ports on a 3×3 side can sit 10px apart, inside the 14px default-zoom radius, so first-match
+  // would always pick the top one; track the nearest instead.
+  const radius = 9 / cam.z + 4;
+  let best = null, bestD = Infinity;
   for (const node of state.nodes) {
     for (const port of S.portsOf(node, ctx)) {
       const p = portPos(node, port);
-      if (Math.hypot(p.x - wx, p.y - wy) < 9 / cam.z + 4) return { node, port };
+      const d = Math.hypot(p.x - wx, p.y - wy);
+      if (d >= radius) continue;
+      if (d < bestD) { bestD = d; best = { node, port }; }
     }
   }
-  return null;
+  return best;
 }
 function nodeAt(wx, wy) {
   for (let i = state.nodes.length - 1; i >= 0; i--) {
@@ -310,7 +316,8 @@ function drawNode(n) {
 
   const ports = S.portsOf(n, ctx);
   for (const port of ports) drawPort(n, port, def);
-  if (def.type !== 'logistic') {
+  if (def.type !== 'logistic' && def.size >= 3) {
+    // 2×2 tiles only have 21px of label width - text condensed to ~27% is unreadable.
     const maxW = r.w / 2 - 11;
     cx.font = '8px monospace';
     for (const side of ['W', 'E']) {

@@ -8,14 +8,15 @@
   ports spreads over the whole span instead, since two 10px rings plus labels can't fit in a half.
   The progress bar stays at the bottom of the tile. Wires attached to a node re-route to the new
   port positions automatically; no save data changes.
-- **Kind glyphs in every port ring.** Each port ring now strokes the matching item/fluid/power/ore
-  glyph inside it, drawn from the same icon set as the inspector, instead of the old plain dot, so
-  a tile's inputs and outputs read at a glance without opening the inspector.
-- **Port names and rates, one line per port.** Any port with an attached wire shows its resource
-  name and flow as a single `name X/min` line beside the ring; a side gates its labels off
-  entirely once its ports are packed too close together to read. A running machine's status line
-  reads `→ Product` instead of a generic status word, and a store or miner's status line appends
-  its buffer count instead of drawing it separately at the bottom of the tile.
+- **Kind glyphs in every port ring except 1×1 logistics.** Each port ring now strokes the matching
+  item/fluid/power/ore glyph inside it, drawn from the same icon set as the inspector, instead of
+  the old plain dot, so a tile's inputs and outputs read at a glance without opening the inspector.
+  1×1 logistics tiles and deposits keep the plain dot and their full-tile port spread.
+- **Port names and rates, one line per port, on 3×3 tiles.** Any port with an attached wire on a
+  3×3 tile shows its resource name and flow as a single `name X/min` line beside the ring; a side
+  gates its labels off entirely once its ports are packed too close together to read. A running
+  machine's status line reads `→ Product` instead of a generic status word, and a store or miner's
+  status line appends its buffer count instead of drawing it separately at the bottom of the tile.
 
 ## 2026-08-23 — Visual language
 
