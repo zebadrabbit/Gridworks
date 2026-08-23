@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-08-23 — Visual language
+
+- **Per-kind icons in the inspector and tooltips.** Six inline SVG glyphs—item,
+  fluid, power, ore, warn, idle—prefix resource names in the inspector's buffer
+  list and prefix `input`/`output` labels in port tooltips. Icons are per-category
+  rather than per-resource, keeping the list compact while the name stays legible
+  text.
+- **A 60-second sparkline** traces one number per node per second: graph fill ratio
+  for stores, actual output for generators (dropping to zero under starvation),
+  production rate for miners and machines, and net power for the HUB (supply minus
+  demand). It renders under the status line in the inspector and in the new node
+  hover tooltip, giving at-a-glance factory health without opening the inspector.
+- **HUB power meter** adds a labelled bar to the HUB inspector, colored green/
+  yellow/red to reflect supply, throttling, and brownout. Hovering any machine on
+  the canvas now shows a tooltip with name, status, and the same sparkline, bridging
+  the gap between the canvas and the inspector.
+
 ## 2026-07-30 — Onboarding
 
 - **A guided first factory.** On a fresh world, an offer card asks whether you want a walkthrough;
