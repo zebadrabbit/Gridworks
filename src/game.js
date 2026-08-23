@@ -1,6 +1,6 @@
 // game.js — canvas rendering + input. Logic lives in sim.js.
 import * as S from './sim.js';
-import { icon, meter } from './icons.js';
+import { icon, meter, ICON_PATH } from './icons.js';
 
 const T = S.TILE;
 const SAVE_KEY = 'gridworks-save-v2';
@@ -207,6 +207,32 @@ function panel(x, y, w, h, edge, glow) {
   cx.shadowBlur = 0;
 }
 
+const GLYPH = {};
+for (const [k, d] of Object.entries(ICON_PATH)) GLYPH[k] = new Path2D(d);
+const glyphKind = (port) => (port.kind === 'resource' ? 'ore' : port.kind);
+
+// Ring in the kind colour; the kind glyph inside it, scaled from the 16-unit icon box to ~7px.
+// 1x1 logistics tiles keep the old filled dot for inputs — a 7px glyph is unreadable there.
+function drawPort(node, port, def) {
+  const p = portPos(node, port);
+  const col = KIND_COLOR[port.kind];
+  cx.beginPath(); cx.arc(p.x, p.y, 5, 0, 7);
+  cx.fillStyle = '#0a0c12'; cx.fill();
+  cx.lineWidth = 2; cx.strokeStyle = col;
+  cx.shadowColor = col; cx.shadowBlur = 6;
+  cx.stroke(); cx.shadowBlur = 0;
+  if (def.type === 'logistic') {
+    if (port.dir === 'in') { cx.beginPath(); cx.arc(p.x, p.y, 2, 0, 7); cx.fillStyle = col; cx.fill(); }
+    return;
+  }
+  const g = GLYPH[glyphKind(port)];
+  if (!g) return;
+  cx.save();
+  cx.translate(p.x - 3.5, p.y - 3.5); cx.scale(7 / 16, 7 / 16);
+  cx.lineWidth = 2.2; cx.strokeStyle = col; cx.stroke(g);
+  cx.restore();
+}
+
 function drawNode(n) {
   const def = ctx.catalog[n.key];
   const r = nodePx(n);
@@ -222,15 +248,7 @@ function drawNode(n) {
     cx.fillStyle = st.edge; cx.font = '9px monospace'; cx.textAlign = 'center';
     cx.fillText(ctx.names[n.res] ?? n.res, r.x + r.w / 2, r.y + r.h / 2 - 2);
     cx.fillText(n.purity, r.x + r.w / 2, r.y + r.h / 2 + 9);
-    for (const port of S.portsOf(n, ctx)) {
-      const p = portPos(n, port);
-      cx.beginPath(); cx.arc(p.x, p.y, 5, 0, 7);
-      cx.fillStyle = '#0a0c12'; cx.fill();
-      cx.lineWidth = 2; cx.strokeStyle = KIND_COLOR[port.kind];
-      cx.shadowColor = KIND_COLOR[port.kind]; cx.shadowBlur = 6;
-      cx.stroke(); cx.shadowBlur = 0;
-      if (port.dir === 'in') { cx.beginPath(); cx.arc(p.x, p.y, 2, 0, 7); cx.fillStyle = KIND_COLOR[port.kind]; cx.fill(); }
-    }
+    for (const port of S.portsOf(n, ctx)) drawPort(n, port, def);
     if (ui.sel?.type === 'node' && ui.sel.id === n.id) selOutline(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
     return;
   }
@@ -255,15 +273,7 @@ function drawNode(n) {
     cx.fillText(Math.floor(total), r.x + r.w / 2, r.y + r.h - 8);
   }
 
-  for (const port of S.portsOf(n, ctx)) {
-    const p = portPos(n, port);
-    cx.beginPath(); cx.arc(p.x, p.y, 5, 0, 7);
-    cx.fillStyle = '#0a0c12'; cx.fill();
-    cx.lineWidth = 2; cx.strokeStyle = KIND_COLOR[port.kind];
-    cx.shadowColor = KIND_COLOR[port.kind]; cx.shadowBlur = 6;
-    cx.stroke(); cx.shadowBlur = 0;
-    if (port.dir === 'in') { cx.beginPath(); cx.arc(p.x, p.y, 2, 0, 7); cx.fillStyle = KIND_COLOR[port.kind]; cx.fill(); }
-  }
+  for (const port of S.portsOf(n, ctx)) drawPort(n, port, def);
   if (ui.sel?.type === 'node' && ui.sel.id === n.id) selOutline(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
 }
 
