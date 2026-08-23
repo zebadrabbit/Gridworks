@@ -233,6 +233,20 @@ function drawPort(node, port, def) {
   cx.restore();
 }
 
+// Attached wires for a port: the far port's resource (for unpinned ports like a container's
+// out0) and the summed flow. Called per visible port per frame; state.wires is small.
+// ponytail: linear scan; index by node id if wire counts ever make this show in a profile.
+function portLink(node, port) {
+  let res = port.res ?? null, flow = 0, attached = false;
+  for (const w of state.wires) {
+    const end = w.a.n === node.id && w.a.p === port.id ? w.b : w.b.n === node.id && w.b.p === port.id ? w.a : null;
+    if (!end) continue;
+    attached = true; flow += w.flow ?? 0;
+    if (!res) { const far = state.nodes.find((q) => q.id === end.n); res = (far && S.getPort(far, end.p, ctx)?.res) ?? null; }
+  }
+  return { res, flow, attached };
+}
+
 function drawNode(n) {
   const def = ctx.catalog[n.key];
   const r = nodePx(n);
@@ -257,8 +271,11 @@ function drawNode(n) {
 
   cx.fillStyle = '#e8f6ff'; cx.font = 'bold 10px monospace'; cx.textAlign = 'center';
   cx.fillText(def.name, r.x + r.w / 2, r.y + 14, r.w - 10);
+  const product = def.type === 'machine' && n.recipe && light === 'green'
+    ? ctx.recipeByKey[n.recipe]?.products?.[0]?.[0] : null;
   cx.fillStyle = light === 'red' ? LIGHT_COLOR.red : '#7a8aa0'; cx.font = '9px monospace';
-  cx.fillText(n.status, r.x + r.w / 2, r.y + 25, r.w - 8);
+  cx.textAlign = 'center';
+  cx.fillText(product ? `→ ${ctx.names[product] ?? product}` : n.status, r.x + r.w / 2, r.y + 25, r.w - 8);
 
   if (def.type === 'machine' && n.recipe) {
     const by = r.y + r.h * 0.5 - 2;
@@ -274,6 +291,23 @@ function drawNode(n) {
   }
 
   for (const port of S.portsOf(n, ctx)) drawPort(n, port, def);
+  if (def.type !== 'logistic') {
+    const maxW = r.w * 0.45;
+    cx.font = '8px monospace';
+    for (const port of S.portsOf(n, ctx)) {
+      if (port.side === 'N') continue;
+      const { res, flow, attached } = portLink(n, port);
+      if (!attached) continue;
+      const p = portPos(n, port);
+      const left = port.side === 'W';
+      cx.textAlign = left ? 'left' : 'right';
+      const x = left ? r.x + 9 : r.x + r.w - 9;
+      cx.fillStyle = '#cfe8ff';
+      cx.fillText(res ? (ctx.names[res] ?? res) : port.kind, x, p.y - 1, maxW);
+      cx.fillStyle = '#7a8aa0';
+      cx.fillText(`${Math.round(flow * 60)}/min`, x, p.y + 8, maxW);
+    }
+  }
   if (ui.sel?.type === 'node' && ui.sel.id === n.id) selOutline(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
 }
 
