@@ -56,14 +56,19 @@ const nodePx = (n) => {
   return { x: n.x * T, y: n.y * T, w: s, h: s };
 };
 
+// Tile reads top-to-bottom as inputs → processing → outputs: inputs are spaced over the upper
+// band of the west edge, outputs over the lower band of the east edge. The bands overlap by
+// 10% so a 2-in/1-out machine still looks like three rows rather than a top-heavy tile.
+const HEADER = 18;
 function portPos(node, port) {
   const r = nodePx(node);
   const sibs = S.portsOf(node, ctx).filter((p) => p.side === port.side);
   const i = sibs.findIndex((p) => p.id === port.id);
   const t = (i + 1) / (sibs.length + 1);
-  if (port.side === 'W') return { x: r.x, y: r.y + t * r.h };
-  if (port.side === 'E') return { x: r.x + r.w, y: r.y + t * r.h };
-  return { x: r.x + t * r.w, y: r.y }; // N
+  if (port.side === 'N') return { x: r.x + t * r.w, y: r.y };
+  const body = r.h - HEADER;
+  if (port.side === 'W') return { x: r.x, y: r.y + HEADER + t * body * 0.55 };
+  return { x: r.x + r.w, y: r.y + HEADER + body * 0.45 + t * body * 0.55 }; // E
 }
 
 function portAt(wx, wy) {
@@ -238,10 +243,11 @@ function drawNode(n) {
   cx.fillText(n.status, r.x + r.w / 2, r.y + 25, r.w - 8);
 
   if (def.type === 'machine' && n.recipe) {
+    const by = r.y + r.h * 0.5 - 2;
     cx.fillStyle = '#152232';
-    cx.fillRect(r.x + 8, r.y + r.h - 12, r.w - 16, 5);
+    cx.fillRect(r.x + 8, by, r.w - 16, 5);
     cx.fillStyle = color;
-    cx.fillRect(r.x + 8, r.y + r.h - 12, (r.w - 16) * Math.min(1, n.progress), 5);
+    cx.fillRect(r.x + 8, by, (r.w - 16) * Math.min(1, n.progress), 5);
   }
   if (def.type === 'store' || def.type === 'miner') {
     const total = Object.values(n.buf).reduce((s, v) => s + v, 0);
