@@ -60,6 +60,10 @@ aside { position: fixed; top: 42px; bottom: 0; width: 220px; overflow-y: auto;
 #milestone .ms-row { font-size: 11px; color: #9fb0c3; margin: 4px 0 2px; display: flex; justify-content: space-between; }
 .ms-bar { background: #152232; height: 6px; border-radius: 3px; margin-bottom: 6px; }
 .ms-bar > i { display: block; height: 6px; border-radius: 3px; background: #4dd8ff; }
+.ico { vertical-align: -2px; margin-right: 4px; color: #7f96ad; }
+.ms-bar.good > i { background: #58d68d; }
+.ms-bar.warn > i { background: #f5c542; }
+.ms-bar.bad > i { background: #ff7675; }
 
 #tooltip {
   position: fixed; pointer-events: none; display: none; z-index: 30;
