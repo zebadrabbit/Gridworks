@@ -56,9 +56,12 @@ const nodePx = (n) => {
   return { x: n.x * T, y: n.y * T, w: s, h: s };
 };
 
-// Tile reads top-to-bottom as inputs → processing → outputs: inputs are spaced over the upper
-// band of the west edge, outputs over the lower band of the east edge. The bands overlap by
-// 10% so a 2-in/1-out machine still looks like three rows rather than a top-heavy tile.
+// Tile reads top-to-bottom as inputs → processing → outputs: below the header, the body splits
+// into a 45% band for inputs (west) up top and a 45% band for outputs (east) below, with the
+// centre 10% left clear for the progress bar. Deposits keep the original full-tile spread across
+// their single side, since they have no header or bar to dodge. When a band would pack ports
+// closer than 12px apart — a small tile with several ports on one side — that side falls back to
+// spreading across the whole body instead, trading the two-band read for legibility.
 const HEADER = 18;
 function portPos(node, port) {
   const r = nodePx(node);
@@ -66,9 +69,22 @@ function portPos(node, port) {
   const i = sibs.findIndex((p) => p.id === port.id);
   const t = (i + 1) / (sibs.length + 1);
   if (port.side === 'N') return { x: r.x + t * r.w, y: r.y };
+  if (ctx.catalog[node.key].type === 'deposit') return { x: port.side === 'W' ? r.x : r.x + r.w, y: r.y + t * r.h };
   const body = r.h - HEADER;
-  if (port.side === 'W') return { x: r.x, y: r.y + HEADER + t * body * 0.55 };
-  return { x: r.x + r.w, y: r.y + HEADER + body * 0.45 + t * body * 0.55 }; // E
+  const band = body * 0.45;
+  const pitch = band / (sibs.length + 1);
+  if (pitch < 12) return { x: port.side === 'W' ? r.x : r.x + r.w, y: r.y + HEADER + t * body }; // crowded: spread over the whole body
+  if (port.side === 'W') return { x: r.x, y: r.y + HEADER + t * band };
+  return { x: r.x + r.w, y: r.y + HEADER + body * 0.55 + t * band }; // E
+}
+
+// Vertical gap between adjacent ports on one side of a node, used to gate the label loop so it
+// never draws two labels close enough to overprint — derived from portPos itself (rather than
+// re-deriving the band/fallback math) so it can never drift out of sync with what actually drew.
+function rowPitch(node, side) {
+  const sibs = S.portsOf(node, ctx).filter((p) => p.side === side);
+  if (sibs.length < 2) return Infinity;
+  return Math.abs(portPos(node, sibs[1]).y - portPos(node, sibs[0]).y);
 }
 
 function portAt(wx, wy) {
@@ -273,21 +289,21 @@ function drawNode(n) {
   cx.fillText(def.name, r.x + r.w / 2, r.y + 14, r.w - 10);
   const product = def.type === 'machine' && n.recipe && light === 'green'
     ? ctx.recipeByKey[n.recipe]?.products?.[0]?.[0] : null;
+  let statusLine = product ? `→ ${ctx.names[product] ?? product}` : n.status;
+  if (def.type === 'store' || def.type === 'miner') {
+    const total = Object.values(n.buf).reduce((s, v) => s + v, 0);
+    statusLine = `${n.status} · ${Math.floor(total)}`;
+  }
   cx.fillStyle = light === 'red' ? LIGHT_COLOR.red : '#7a8aa0'; cx.font = '9px monospace';
   cx.textAlign = 'center';
-  cx.fillText(product ? `→ ${ctx.names[product] ?? product}` : n.status, r.x + r.w / 2, r.y + 25, r.w - 8);
+  cx.fillText(statusLine, r.x + r.w / 2, r.y + 25, r.w - 8);
 
   if (def.type === 'machine' && n.recipe) {
-    const by = r.y + r.h * 0.5 - 2;
+    const by = r.y + HEADER + (r.h - HEADER) * 0.5 - 2;
     cx.fillStyle = '#152232';
     cx.fillRect(r.x + 8, by, r.w - 16, 5);
     cx.fillStyle = color;
     cx.fillRect(r.x + 8, by, (r.w - 16) * Math.min(1, n.progress), 5);
-  }
-  if (def.type === 'store' || def.type === 'miner') {
-    const total = Object.values(n.buf).reduce((s, v) => s + v, 0);
-    cx.fillStyle = '#9fb0c3'; cx.font = '9px monospace';
-    cx.fillText(Math.floor(total), r.x + r.w / 2, r.y + r.h - 8);
   }
 
   const ports = S.portsOf(n, ctx);
@@ -295,18 +311,20 @@ function drawNode(n) {
   if (def.type !== 'logistic') {
     const maxW = r.w * 0.45;
     cx.font = '8px monospace';
-    for (const port of ports) {
-      if (port.side === 'N') continue;
-      const { res, flow, attached } = portLink(n, port);
-      if (!attached) continue;
-      const p = portPos(n, port);
-      const left = port.side === 'W';
-      cx.textAlign = left ? 'left' : 'right';
-      const x = left ? r.x + 9 : r.x + r.w - 9;
-      cx.fillStyle = '#cfe8ff';
-      cx.fillText(res ? (ctx.names[res] ?? res) : port.kind, x, p.y - 1, maxW);
-      cx.fillStyle = '#7a8aa0';
-      cx.fillText(`${Math.round(flow * 60)}/min`, x, p.y + 8, maxW);
+    for (const side of ['W', 'E']) {
+      const pitch = rowPitch(n, side);
+      if (pitch < 10) continue;
+      for (const port of ports) {
+        if (port.side !== side) continue;
+        const { res, flow, attached } = portLink(n, port);
+        if (!attached) continue;
+        const p = portPos(n, port);
+        const left = side === 'W';
+        cx.textAlign = left ? 'left' : 'right';
+        const x = left ? r.x + 9 : r.x + r.w - 9;
+        cx.fillStyle = '#cfe8ff';
+        cx.fillText(`${res ? (ctx.names[res] ?? res) : port.kind} ${Math.round(flow * 60)}/min`, x, p.y + 3, maxW);
+      }
     }
   }
   if (ui.sel?.type === 'node' && ui.sel.id === n.id) selOutline(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
