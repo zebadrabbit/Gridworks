@@ -557,6 +557,7 @@ canvas.addEventListener('mousemove', (e) => {
   }
   updateTooltip(e);
 });
+canvas.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
 
 addEventListener('mouseup', (e) => {
   // This listener is on window, not the canvas, because a drag may end anywhere — but only
@@ -815,7 +816,7 @@ function updateBuffers() {
   if (pwr) {
     const p = state.power ?? { supply: 0, demand: 0 };
     const cls = p.demand <= p.supply ? 'good' : p.supply > 0 ? 'warn' : 'bad';
-    pwr.innerHTML = meter(`${icon('power')}Power`, p.demand, Math.max(p.supply, p.demand), cls);
+    pwr.innerHTML = meter(`${icon('power')}Power`, p.supply, p.demand, cls);
   }
 }
 
