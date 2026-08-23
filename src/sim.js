@@ -622,7 +622,8 @@ function sampleHistory(state, ctx) {
     if (def.type === 'store') v = bufTotal(node.buf) / def.cap;
     else if (def.type === 'generator') v = node.status === 'generating' ? def.powerOut : 0;
     else if (def.type === 'hub') v = state.power.supply - state.power.demand;
-    else { v = (node.made ?? 0) - (node.hMade ?? 0); node.hMade = node.made ?? 0; }
+    else if (node.hMade === undefined) { node.hMade = node.made ?? 0; v = 0; } // first sample after load: no prior baseline, so no spike
+    else { v = (node.made ?? 0) - node.hMade; node.hMade = node.made ?? 0; }
     (node.hist ??= []).push(v);
     if (node.hist.length > HIST_LEN) node.hist.shift();
   }

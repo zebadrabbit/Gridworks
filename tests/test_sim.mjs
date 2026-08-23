@@ -1185,4 +1185,48 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
     'hist survives a plain clone (the save replacer in game.js strips it, not the sim)');
 }
 
+// history sampler: a generator samples powerOut while generating
+{
+  const s = newGame(8, ctx);
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const gen = addNode(s, 'biomass-burner', 10, 10, ctx);
+  gen.buf.wood = 50; // pre-stock so it's generating immediately, no wiring needed
+  tick(s, 0.5, ctx);
+  tick(s, 0.5, ctx); // crosses the first 1s boundary -> one sample
+  assert.equal(gen.status, 'generating', 'burner is generating with fuel stocked');
+  assert.equal(gen.hist.length, 1, 'generator sampled once');
+  assert.equal(gen.hist[0], ctx.catalog['biomass-burner'].powerOut,
+    'generator sample equals powerOut while generating');
+}
+
+// history sampler: miner/machine sample is a made-delta; the very first sample after a
+// fresh hMade baseline is 0 even when `made` is already nonzero (e.g. a node just loaded
+// from a save, where hMade was stripped but made was not)
+{
+  const s = newGame(9, ctx);
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  const dep = addDeposit(s, 'iron-ore', 'mineral', 'normal', 1, 5, 5);
+  const miner = addNode(s, 'miner-mk1', 10, 5, ctx);
+  const burner = addNode(s, 'biomass-burner', 10, 12, ctx);
+  burner.buf.wood = 50;
+  addWire(s, dep, 'out0', miner, 'res0', ctx);
+  addWire(s, burner, 'pout', miner, 'pin', ctx);
+  miner.made = 500; // simulate a save-loaded node: cumulative made already nonzero
+  delete miner.hMade; // ...but no per-second baseline yet -- hMade is stripped on save
+  tick(s, 0.5, ctx);
+  tick(s, 0.5, ctx); // crosses the first 1s boundary -> first sample
+  assert.equal(miner.hist.length, 1, 'miner sampled once');
+  assert.equal(miner.hist[0], 0,
+    'first sample after a fresh hMade baseline is 0, not the whole cumulative made');
+  const madeBefore = miner.made;
+  for (let i = 0; i < 2; i++) tick(s, 0.5, ctx); // crosses the second 1s boundary
+  const madeAfter = miner.made;
+  assert.equal(miner.hist.length, 2, 'miner sampled twice');
+  assert.ok(madeAfter > madeBefore, 'miner kept mining between samples');
+  assert.ok(Math.abs(miner.hist[1] - (madeAfter - madeBefore)) < 1e-9,
+    'later sample equals the made delta accumulated over that second');
+}
+
 console.log('all sim checks passed');
