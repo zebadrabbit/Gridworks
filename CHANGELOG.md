@@ -16,7 +16,7 @@
 - **HUB power meter** adds a labelled bar to the HUB inspector, showing supply
   over demand and colored green/yellow/red to reflect supply, throttling, and
   brownout. Hovering any non-deposit node on the canvas now shows a tooltip with
-  name and status (stores, generators, machines, and the HUB also get the same
+  name and status (stores, generators, miners, machines, and the HUB also get the same
   sparkline), bridging the gap between the canvas and the inspector.
 
 ## 2026-07-30 — Onboarding
