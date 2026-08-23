@@ -423,7 +423,7 @@ function updateTooltip(e) {
   const port = portAt(ui.mouse.x, ui.mouse.y);
   if (port) {
     const { node, port: p } = port;
-    html = `<b>${p.dir === 'in' ? 'input' : 'output'}</b> · ${p.kind}`;
+    html = `<b>${icon(p.kind === 'resource' ? 'ore' : p.kind)}${p.dir === 'in' ? 'input' : 'output'}</b> · ${p.kind}`;
     if (p.res) html += `<div class="dim">${ctx.names[p.res] ?? p.res}</div>`;
     else if (p.accepts) html += `<div class="dim">accepts: ${p.accepts.map((r) => ctx.names[r] ?? r).join(', ')}</div>`;
     html += `<div class="dim">${ctx.catalog[node.key].name}</div>`;
@@ -440,10 +440,24 @@ function updateTooltip(e) {
         html = `<b>${res ? (ctx.names[res] ?? res) : 'idle'}</b> · ${Math.round(w.flow * 60)}/min`;
         if (markName) html += `<div class="dim">${markName}</div>`;
       }
+    } else {
+      const n = nodeAt(ui.mouse.x, ui.mouse.y);
+      const def = n && ctx.catalog[n.key];
+      if (n && def && def.type !== 'deposit') {
+        const cls = { red: 'bad', yellow: 'warn', green: 'good' }[S.lightOf(n, def)] ?? '';
+        html = `<b>${def.name}</b><div class="dim ${cls}">${n.status}</div>`;
+        if (n.hist) html += `<canvas id="tip-spark" width="120" height="24"></canvas>`;
+      }
     }
   }
   if (!html) { tip.style.display = 'none'; return; }
   tip.innerHTML = html;
+  const ts = tip.querySelector('#tip-spark');
+  if (ts) {
+    const n = nodeAt(ui.mouse.x, ui.mouse.y);
+    const def = ctx.catalog[n.key];
+    drawSpark(ts, n.hist, def.type === 'store' ? 1 : def.type === 'generator' ? def.powerOut : undefined);
+  }
   tip.style.display = 'block';
   tip.style.left = (e.clientX + 14) + 'px';
   tip.style.top = (e.clientY + 14) + 'px';
