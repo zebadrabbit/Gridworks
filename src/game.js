@@ -1,5 +1,6 @@
 // game.js — canvas rendering + input. Logic lives in sim.js.
 import * as S from './sim.js';
+import { icon, meter } from './icons.js';
 
 const T = S.TILE;
 const SAVE_KEY = 'gridworks-save-v2';
@@ -726,6 +727,10 @@ function refreshInspector() {
   if (['miner', 'machine', 'generator'].includes(def.type)) {
     html += `<div class="dim" id="uptime">${uptimeText(n)}</div>`;
   }
+  if (['store', 'generator', 'miner', 'machine', 'hub'].includes(def.type)) {
+    html += `<canvas id="spark" width="220" height="40"></canvas>`;
+  }
+  if (def.type === 'hub') html += `<section id="pwr"></section>`;
   if (n.depositRes) html += `<div class="dim">on ${ctx.names[n.depositRes]} (x${n.depositMult})</div>`;
   else if (def.type === 'miner') html += `<div class="dim">wire a deposit to res port</div>`;
   if (def.draw) html += `<div class="dim">draws ${def.draw} MW</div>`;
@@ -758,12 +763,28 @@ function refreshInspector() {
   updateBuffers();
 }
 
+// One polyline, baseline at 0. Scales to `max` if given, else to the largest sample, so a
+// 0–1 store graph and a 0–250 MW generator graph both fill the box.
+function drawSpark(cv, hist, max) {
+  const g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H);
+  if (!hist?.length) return;
+  const lo = Math.min(0, ...hist), hi = Math.max(max ?? 0, ...hist, lo + 1e-9);
+  const x = (i) => (i / (S.HIST_LEN - 1)) * (W - 2) + 1;
+  const y = (v) => H - 1 - ((v - lo) / (hi - lo)) * (H - 2);
+  g.strokeStyle = '#4dd8ff'; g.lineWidth = 1.5; g.beginPath();
+  hist.forEach((v, i) => (i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v))));
+  g.stroke();
+  if (lo < 0) { g.strokeStyle = '#ff767588'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, y(0)); g.lineTo(W, y(0)); g.stroke(); }
+}
+
 function updateBuffers() {
   if (ui.sel?.type !== 'node') return;
   const n = state.nodes.find((q) => q.id === ui.sel.id);
   if (!n) return;
   const render = (buf) => Object.entries(buf).filter(([, v]) => v > 0.05)
-    .map(([k, v]) => `<div class="buf"><span>${ctx.names[k] ?? k}</span><span>${fmt(v)}</span></div>`)
+    .map(([k, v]) => `<div class="buf"><span>${icon(S.kindOf(k, ctx))}${ctx.names[k] ?? k}</span><span>${fmt(v)}</span></div>`)
     .join('') || '<div class="dim">empty</div>';
   const bufs = document.getElementById('bufs');
   if (bufs) bufs.innerHTML = render(n.buf);
@@ -771,6 +792,17 @@ function updateBuffers() {
   if (shipped) shipped.innerHTML = render(state.shipped);
   const uptime = document.getElementById('uptime');
   if (uptime) uptime.textContent = uptimeText(n);
+  const spark = document.getElementById('spark');
+  if (spark) {
+    const def = ctx.catalog[n.key];
+    drawSpark(spark, n.hist, def.type === 'store' ? 1 : def.type === 'generator' ? def.powerOut : undefined);
+  }
+  const pwr = document.getElementById('pwr');
+  if (pwr) {
+    const p = state.power ?? { supply: 0, demand: 0 };
+    const cls = p.demand <= p.supply ? 'good' : p.supply > 0 ? 'warn' : 'bad';
+    pwr.innerHTML = meter(`${icon('power')}Power`, p.demand, Math.max(p.supply, p.demand), cls);
+  }
 }
 
 function updateMilestonePanel() {
