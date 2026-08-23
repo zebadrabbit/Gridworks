@@ -56,26 +56,28 @@ const nodePx = (n) => {
   return { x: n.x * T, y: n.y * T, w: s, h: s };
 };
 
-// Tile reads top-to-bottom as inputs → processing → outputs: below the header, the body splits
-// into a 45% band for inputs (west) up top and a 45% band for outputs (east) below, with the
-// centre 10% left clear for the progress bar. Deposits keep the original full-tile spread across
-// their single side, since they have no header or bar to dodge. When a band would pack ports
-// closer than 12px apart — a small tile with several ports on one side — that side falls back to
-// spreading across the whole body instead, trading the two-band read for legibility.
-const HEADER = 18;
+// Ports live between the header and the progress bar. When a side has a single port the tile
+// reads as layers — input in the upper half of that span, output in the lower half — which is
+// every smelter, constructor, miner and container. A side with two or more ports spreads over the
+// whole span instead: the halves cannot hold two 10px rings plus labels on a 96px tile.
+// 1x1 logistics and deposits keep the plain full-tile spread; they have no header text to dodge.
+const HEADER = 28;      // name baseline 14, status baseline 25
+const BAR_H = 12;       // progress bar sits at r.h - 12; ports stop 18 above the bottom
 function portPos(node, port) {
   const r = nodePx(node);
   const sibs = S.portsOf(node, ctx).filter((p) => p.side === port.side);
   const i = sibs.findIndex((p) => p.id === port.id);
   const t = (i + 1) / (sibs.length + 1);
+  const x = port.side === 'W' ? r.x : r.x + r.w;
   if (port.side === 'N') return { x: r.x + t * r.w, y: r.y };
-  if (ctx.catalog[node.key].type === 'deposit') return { x: port.side === 'W' ? r.x : r.x + r.w, y: r.y + t * r.h };
-  const body = r.h - HEADER;
-  const band = body * 0.45;
-  const pitch = band / (sibs.length + 1);
-  if (pitch < 12) return { x: port.side === 'W' ? r.x : r.x + r.w, y: r.y + HEADER + t * body }; // crowded: spread over the whole body
-  if (port.side === 'W') return { x: r.x, y: r.y + HEADER + t * band };
-  return { x: r.x + r.w, y: r.y + HEADER + body * 0.55 + t * band }; // E
+  const def = ctx.catalog[node.key];
+  if (def.type === 'deposit' || def.type === 'logistic') return { x, y: r.y + t * r.h };
+  const top = r.y + HEADER, span = r.h - HEADER - 18;
+  if (sibs.length === 1) {
+    const half = span / 2 - 3;
+    return { x, y: port.side === 'W' ? top + half / 2 : top + span / 2 + 3 + half / 2 };
+  }
+  return { x, y: top + t * span };
 }
 
 // Vertical gap between adjacent ports on one side of a node, used to gate the label loop so it
@@ -299,7 +301,7 @@ function drawNode(n) {
   cx.fillText(statusLine, r.x + r.w / 2, r.y + 25, r.w - 8);
 
   if (def.type === 'machine' && n.recipe) {
-    const by = r.y + HEADER + (r.h - HEADER) * 0.5 - 2;
+    const by = r.y + r.h - BAR_H;
     cx.fillStyle = '#152232';
     cx.fillRect(r.x + 8, by, r.w - 16, 5);
     cx.fillStyle = color;
@@ -309,7 +311,7 @@ function drawNode(n) {
   const ports = S.portsOf(n, ctx);
   for (const port of ports) drawPort(n, port, def);
   if (def.type !== 'logistic') {
-    const maxW = r.w * 0.45;
+    const maxW = r.w / 2 - 11;
     cx.font = '8px monospace';
     for (const side of ['W', 'E']) {
       const pitch = rowPitch(n, side);

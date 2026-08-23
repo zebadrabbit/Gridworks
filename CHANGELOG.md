@@ -2,12 +2,12 @@
 
 ## 2026-08-23 — Tile I/O layers
 
-- **Layered port layout.** Inputs move to the upper-left, outputs to the lower-right, replacing
-  the old layout of two full-height columns, one for inputs and one for outputs. The progress bar
-  moves from the bottom edge to the centre of the body, between the two bands. A side packed with
-  more ports than its band can space at 12px or wider falls back to spreading across the whole
-  body instead of crowding them together. Wires attached to a node re-route to the new port
-  positions automatically; no save data changes.
+- **Layered port layout.** A side with a single port reads as layers — input in the upper half of
+  the span between the header and the progress bar, output in the lower half — replacing the old
+  layout of two full-height columns, one for inputs and one for outputs. A side with two or more
+  ports spreads over the whole span instead, since two 10px rings plus labels can't fit in a half.
+  The progress bar stays at the bottom of the tile. Wires attached to a node re-route to the new
+  port positions automatically; no save data changes.
 - **Kind glyphs in every port ring.** Each port ring now strokes the matching item/fluid/power/ore
   glyph inside it, drawn from the same icon set as the inspector, instead of the old plain dot, so
   a tile's inputs and outputs read at a glance without opening the inspector.
