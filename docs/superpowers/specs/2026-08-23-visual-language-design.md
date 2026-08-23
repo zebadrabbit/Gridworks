@@ -41,7 +41,7 @@ past 60). The metric depends on the node type:
 | `store` | `bufTotal(buf) / cap` (0–1) |
 | `generator` | `supplying ? powerOut : 0` — a starved generator dips |
 | `miner`, `machine` | units output in the last second |
-| `hub` | `supply − demand` of its power net (already computed in the power pass) |
+| `hub` | `state.power.supply − state.power.demand` (the global total `tick()` already computes; the HUB draws nothing so it belongs to no net) |
 
 `hist` is created lazily, stripped on save, and ignored by `simulateOffline`. Old saves load
 unchanged and the graph simply starts empty. One test in `test_sim.mjs`: tick 3s, expect three
@@ -59,7 +59,7 @@ variants.
 ## Where it shows
 
 **Inspector** (`refreshInspector`, `updateBuffers`)
-- Every port row in `#bufs` gets `icon(kind)` before the resource name.
+- Every buffer row in `#bufs` gets `icon(kindOf(res))` before the resource name.
 - `store`, `generator`, `miner`, `machine`, `hub` get a `<canvas width=220 height=40>` under the
   status line, drawn from `hist` by one `drawSpark(canvas, hist, max)`.
 - The HUB additionally gets `meter('Power', supply, demand)`, class from `lightOf`.
