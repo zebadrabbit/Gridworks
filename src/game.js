@@ -898,7 +898,9 @@ const HELP = [
   ['Delete', 'select, then Del'],
   ['Pause', 'Space, or the ⏸ button'],
   ['Speed', 'the 1x button cycles 1x / 2x / 4x'],
-  ['Wire style', 'S toggles straight/noodle — per-wire when a wire is selected'],
+  ['Wire style', 'S toggles straight/noodle — per-wire when a wire is selected, else for new wires'],
+  ['Tidy a wire', 'straight wires bend: double-click to add a corner, drag it, Del removes it'],
+  ['Long runs', 'mid-wire, click empty ground to drop a pole and keep going'],
   ['Recipes', 'select a machine, then the Recipe dropdown'],
   ['Minimap', 'click or drag to jump, hover for detail, − to collapse'],
 ];
