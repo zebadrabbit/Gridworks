@@ -1262,6 +1262,19 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   const w = addWire(s, sp, 'out1', smelter, ironIn.id, ctx);
   assert.ok(w, 'any -> iron input allowed');
 
+  // an any port refuses a destination fixed to a res a sibling has claimed (excludes path)
+  const smelter2 = addNode(s, 'smelter', 20, 16, ctx);
+  setRecipe(s, smelter2, ctx.recipesByCat[ctx.catalog.smelter.cat].find((r) => r.name === 'Copper Ingot').key_name, ctx);
+  const copperIn = portsOf(smelter2, ctx).find((p) => p.dir === 'in' && p.res === 'copper-ore');
+  assert.ok(copperIn);
+  assert.equal(addWire(s, sp, 'out1', smelter2, copperIn.id, ctx), null, 'any port excluding copper refuses a copper input');
+  // and a sibling claiming a res later drops an existing any-port wire into that res
+  setFilter(s, sp, 0, { mode: 'any' }, ctx);           // release copper
+  const w3 = addWire(s, sp, 'out2', smelter2, copperIn.id, ctx);
+  assert.ok(w3, 'unclaimed copper: any -> copper input allowed');
+  setFilter(s, sp, 0, { mode: 'item', res: 'copper-ore' }, ctx); // claim it again
+  assert.ok(!s.wires.some((q) => q.id === w3.id), 'sibling claim drops the any-port wire via excludes');
+
   // changing the wired port to item:copper drops the wire; to item:iron keeps it
   setFilter(s, sp, 1, { mode: 'item', res: 'copper-ore' }, ctx);
   assert.ok(!s.wires.some((q) => q.id === w.id), 'mismatched wire dropped on rule change');
