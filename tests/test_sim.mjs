@@ -1295,6 +1295,17 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.deepEqual(sp2.filters[0], { mode: 'item', res: 'copper-ore' });
   assert.deepEqual(sp2.filters[1], { mode: 'any' }, 'unknown res -> any');
   assert.equal(back.nodes.find((n) => n.id === merger.id).filters, undefined, 'filters stripped from a merger');
+
+  // a res of the wrong kind for the node falls back to any, and filters past the last output
+  // are dropped before they can claim a res for the siblings
+  sp.filters[1] = { mode: 'item', res: 'water' };
+  sp.filters[3] = { mode: 'item', res: 'screw' };
+  const back2 = normalizeSave(JSON.parse(JSON.stringify(s)), ctx);
+  const sp3 = back2.nodes.find((n) => n.id === sp.id);
+  assert.deepEqual(sp3.filters[1], { mode: 'any' }, 'fluid res on an item splitter -> any');
+  assert.equal(sp3.filters.length, 3, 'filters clamped to nOut');
+  assert.ok(portsOf(sp3, ctx).filter((p) => p.dir === 'out')
+    .every((p) => !(p.excludes ?? []).includes('screw')), 'a dropped filter claims nothing');
 }
 
 // smart splitter: routing
@@ -1419,6 +1430,79 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
     run(s, 100);
     const o1 = boxes[1].buf['iron-ore'], o2 = boxes[2].buf['iron-ore'];
     assert.ok(o1 > 5 && Math.abs(o1 - o2) < 1e-6, `overflow shared evenly ${o1} ${o2}`);
+  }
+
+  // overflow yields to an open sibling: a space-blocked primary's share must go to the sibling
+  // that can still take it, not fall through to overflow (Overflow must not behave like Any).
+  const CAP = ctx.catalog['storage-container'].cap;
+  {
+    const { s, src, sp, boxes } = mk();
+    src.buf = { 'iron-ore': 3000 };
+    setFilter(s, sp, 2, { mode: 'overflow' }, ctx);
+    wireAll(s, sp, boxes);
+    boxes[0].buf['iron-ore'] = CAP; // blocked from tick 0
+    run(s, 400); // 40s at 1200/min = 800 units delivered
+    assert.ok(boxes[1].buf['iron-ore'] > 700,
+      `open sibling gets the whole belt: ${boxes[1].buf['iron-ore']}`);
+    assert.equal(boxes[2].buf['iron-ore'] ?? 0, 0, 'overflow got nothing while a sibling had room');
+  }
+  // the same rig with out2 as `any` splits between the two open outputs — the difference is
+  // exactly what makes overflow overflow
+  {
+    const { s, src, sp, boxes } = mk();
+    src.buf = { 'iron-ore': 3000 };
+    wireAll(s, sp, boxes);
+    boxes[0].buf['iron-ore'] = CAP;
+    run(s, 400);
+    const a = boxes[1].buf['iron-ore'], b = boxes[2].buf['iron-ore'];
+    assert.ok(a > 300 && Math.abs(a - b) < a * 0.05, `two any outputs share evenly ${a} ${b}`);
+  }
+
+  // multi-resource: `taken` is per-res, so a blocked iron primary never makes copper overflow
+  {
+    const { s, src, sp, boxes } = mk();
+    src.buf = { 'iron-ore': 1000, 'copper-ore': 1000 };
+    setFilter(s, sp, 1, { mode: 'item', res: 'copper-ore' }, ctx);
+    setFilter(s, sp, 2, { mode: 'overflow' }, ctx);
+    wireAll(s, sp, boxes);
+    boxes[0].buf['iron-ore'] = CAP - 20; // the any port's only carryable res, nearly full
+    run(s, 100);
+    assert.ok((boxes[2].buf['iron-ore'] ?? 0) > 0, 'iron the blocked primary could not take overflows');
+    assert.equal(boxes[2].buf['copper-ore'] ?? 0, 0, 'copper never overflows: its own primary has room');
+    assert.ok(boxes[1].buf['copper-ore'] > 50, 'copper kept flowing to its primary');
+  }
+  // ...and a res claimed by an `item` sibling never reaches an overflow port at all: `excludes`
+  // covers mode overflow too (portsOf), so iron/copper/overflow leaves the overflow port idle.
+  {
+    const { s, src, sp, boxes } = mk();
+    src.buf = { 'iron-ore': 1000, 'copper-ore': 1000 };
+    setFilter(s, sp, 0, { mode: 'item', res: 'iron-ore' }, ctx);
+    setFilter(s, sp, 1, { mode: 'item', res: 'copper-ore' }, ctx);
+    setFilter(s, sp, 2, { mode: 'overflow' }, ctx);
+    wireAll(s, sp, boxes);
+    boxes[0].buf['iron-ore'] = CAP - 20;
+    run(s, 100);
+    assert.deepEqual(boxes[2].buf, {}, 'an item-claimed res is excluded from the overflow port');
+  }
+
+  // fluid path: a pipe splitter sorts two fluids and the any port sees nothing unclaimed
+  {
+    const s = newGame(23, ctx);
+    s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+    s.unlocked.buildings = Object.keys(ctx.catalog); s.pipeMark = ctx.pipes.length - 1;
+    const src = addNode(s, 'fluid-buffer', 2, 10, ctx);
+    const sp = addNode(s, 'pipe-splitter', 8, 10, ctx);
+    const tanks = [0, 1, 2].map((i) => addNode(s, 'fluid-buffer', 14, 4 + i * 5, ctx));
+    src.buf = { water: 500, 'crude-oil': 500 };
+    assert.ok(addWire(s, src, 'out0', sp, 'in0', ctx), 'fluid feed wire');
+    setFilter(s, sp, 0, { mode: 'item', res: 'water' }, ctx);
+    setFilter(s, sp, 1, { mode: 'item', res: 'crude-oil' }, ctx);
+    tanks.forEach((t, i) => assert.ok(addWire(s, sp, 'out' + i, t, 'in0', ctx), 'pipe wire out' + i));
+    run(s, 300);
+    assert.ok(only(tanks[0], 'water'), `tank0 water only: ${JSON.stringify(tanks[0].buf)}`);
+    assert.ok(only(tanks[1], 'crude-oil'), `tank1 oil only: ${JSON.stringify(tanks[1].buf)}`);
+    assert.ok(Object.values(tanks[2].buf).every((v) => v <= 1e-9),
+      `tank2 empty — nothing unclaimed: ${JSON.stringify(tanks[2].buf)}`);
   }
 }
 

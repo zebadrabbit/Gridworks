@@ -218,6 +218,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ### Task 2: Transfer loop — excludes, eligible fair-share, overflow last
 
+> Superseded during execution: the lazy `overflowBuf` in Step 3 starved primaries; the shipped loop uses an eager pre-tick snapshot with a `taken` accumulator (overflow pool = snapshot − taken) and a space-blocked-sibling guard. The spec's "Transfer loop" section is authoritative.
+
 **Files:**
 - Modify: `src/sim.js` transfer loop (from `const byId = Object.fromEntries(...)` to the end of the `for (const wire of state.wires)` loop, ~lines 764–806)
 - Test: `tests/test_sim.mjs`

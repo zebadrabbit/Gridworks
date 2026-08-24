@@ -590,9 +590,9 @@ export function normalizeSave(raw, ctx) {
     const def = ctx.catalog[n.key];
     if (def.type !== 'logistic' || !(def.nOut > 1)) { delete n.filters; continue; }
     if (!Array.isArray(n.filters)) { delete n.filters; continue; }
-    n.filters = n.filters.map((f) =>
+    n.filters = n.filters.slice(0, def.nOut).map((f) =>
       f?.mode === 'overflow' ? { mode: 'overflow' }
-      : f?.mode === 'item' && ctx.names[f.res] ? { mode: 'item', res: f.res }
+      : f?.mode === 'item' && ctx.names[f.res] && kindOf(f.res, ctx) === def.lkind ? { mode: 'item', res: f.res }
       : { mode: 'any' });
   }
   if (!s.nodes.some((n) => n.key === 'the-hub')) return null;
@@ -808,7 +808,10 @@ export function tick(state, dt, ctx) {
   // Overflow outputs run after every other wire so they see only what nobody else could take.
   // ponytail: two passes over a sorted list, not an evaluation graph.
   const isOverflow = (w) => srcPortOf(w)?.mode === 'overflow';
-  const ordered = [...state.wires.filter((w) => !isOverflow(w)), ...state.wires.filter(isOverflow)];
+  // ponytail: with no overflow rule anywhere the two passes are the same list — skip the copy.
+  const ordered = state.wires.some(isOverflow)
+    ? [...state.wires.filter((w) => !isOverflow(w)), ...state.wires.filter(isOverflow)]
+    : state.wires;
   // Every logistic node's buffer is snapshotted once, eagerly, before either pass runs — the
   // pre-rewrite timing, so a plain (non-overflow) splitter gets back its exact old behaviour.
   // Pass 0 (primary) shares from `pre[node][res]` directly; pass 1 (overflow) shares whatever
@@ -825,6 +828,15 @@ export function tick(state, dt, ctx) {
     if (!p) return false;
     if (p.res) return p.res === res;
     return !(p.excludes?.includes(res));
+  };
+  // room for `res` on a wire's destination — same rule as `space` below, used to drop
+  // space-blocked siblings out of the pass-0 share so their slice goes to an open sibling
+  // instead of falling through to overflow.
+  const spaceOn = (w, res) => {
+    const d = byId[w.b.n]; if (!d) return 0;
+    const dd = ctx.catalog[d.key];
+    return dd.type === 'hub' || dd.type === 'elevator' ? Infinity
+      : dd.type === 'store' ? dd.cap - bufTotal(d.buf) : BUF_CAP - (d.buf[res] ?? 0);
   };
   for (const wire of ordered) {
     wire.flow = 0;
@@ -854,7 +866,17 @@ export function tick(state, dt, ctx) {
     // same pass (overflow siblings split what pass 0 actually left behind).
     let share;
     if (ctx.catalog[src.key].type === 'logistic') {
-      const sibs = (outWires[src.id] ?? []).filter((w) => isOverflow(w) === (pass === 1) && carries(w, res));
+      const outs = outWires[src.id] ?? [];
+      // ponytail: a splitter with no item/overflow rule can never exclude a sibling, so skip
+      // the filter entirely — the plain path stays exactly what it was before rules existed.
+      let sibs = outs;
+      if (src.filters?.some((f) => f?.mode === 'item' || f?.mode === 'overflow')) {
+        // A blocked primary must not shrink its siblings' share when an overflow port is
+        // waiting: its unused slice would land in `pre - taken` and leak to overflow.
+        const hasOverflow = outs.some(isOverflow);
+        sibs = outs.filter((w) => isOverflow(w) === (pass === 1) && carries(w, res)
+          && !(pass === 0 && hasOverflow && spaceOn(w, res) <= 1e-9));
+      }
       const avail = pre[src.id]?.[res] ?? 0;
       const pool = pass === 1 ? avail - (taken[src.id]?.[res] ?? 0) : avail;
       share = Math.max(0, pool) / Math.max(1, sibs.length);
