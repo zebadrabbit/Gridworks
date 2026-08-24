@@ -861,7 +861,7 @@ function refreshInspector() {
   }
 
   const statusCls = { red: 'bad', yellow: 'warn', green: 'good' }[S.lightOf(n, def)] ?? '';
-  let html = `<h2>${def.name}</h2><div class="status ${statusCls}">${n.status}</div>`;
+  let html = `<h2>${def.name}</h2><div id="nstatus" class="status ${statusCls}">${n.status}</div>`;
   if (['miner', 'machine', 'generator'].includes(def.type)) {
     html += `<div class="dim" id="uptime">${uptimeText(n)}</div>`;
   }
@@ -928,6 +928,13 @@ function updateBuffers() {
   if (bufs) bufs.innerHTML = render(n.buf);
   const shipped = document.getElementById('bufs2');
   if (shipped) shipped.innerHTML = render(state.shipped);
+  // status is live too — it was rendered once at selection and went stale the moment a wire
+  // changed it (a burner selected before its fuel arrived read "no fuel" while generating)
+  const st = document.getElementById('nstatus');
+  if (st) {
+    st.textContent = n.status;
+    st.className = `status ${{ red: 'bad', yellow: 'warn', green: 'good' }[S.lightOf(n, ctx.catalog[n.key])] ?? ''}`;
+  }
   const uptime = document.getElementById('uptime');
   if (uptime) uptime.textContent = uptimeText(n);
   const spark = document.getElementById('spark');
