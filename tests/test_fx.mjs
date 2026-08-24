@@ -28,6 +28,12 @@ mem.set('gw_settings', '{not json');
 s = loadSettings(globalThis.localStorage);
 assert.deepEqual(s, DEFAULTS, 'corrupt settings -> defaults');
 
+// --- settings: primitive JSON (not an object) falls back to defaults
+mem.clear();
+mem.set('gw_settings', '42');
+s = loadSettings(globalThis.localStorage);
+assert.deepEqual(s, DEFAULTS, 'primitive settings -> defaults');
+
 // --- settings: saved blob wins over defaults, unknown keys dropped
 mem.clear();
 mem.set('gw_settings', JSON.stringify({ manta: false, bogus: 1 }));

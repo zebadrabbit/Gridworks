@@ -13,6 +13,7 @@ const OLD_MAP = 'gridworks-minimap', OLD_TUT = 'gridworks-tutorial';
 export function loadSettings(storage) {
   let saved = {};
   try { saved = JSON.parse(storage.getItem(KEY) ?? '{}') ?? {}; } catch { saved = {}; }
+  if (typeof saved !== 'object') saved = {};
   const s = { ...DEFAULTS };
   for (const k of Object.keys(DEFAULTS)) if (k in saved) s[k] = saved[k];
   const oldMap = storage.getItem(OLD_MAP), oldTut = storage.getItem(OLD_TUT);

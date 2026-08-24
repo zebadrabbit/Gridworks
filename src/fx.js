@@ -29,16 +29,27 @@ export function flow(cx, w, pts, ratio, speedMul, now, color) {
   const count = Math.floor(len / spacing);
   if (count < 1) return;
   const offset = ((now / 40) * speedMul) % spacing;
-  cx.fillStyle = color;
-  for (let i = 0; i < count; i++) {
-    const p = pointAt(pts, cum, (offset + i * spacing) % len);
-    if (w.kind === 'fluid') {
-      cx.beginPath(); cx.arc(p.x, p.y, 2, 0, Math.PI * 2); cx.fill();
-    } else {
-      cx.save(); cx.translate(p.x, p.y); cx.rotate(p.a);
-      cx.beginPath(); cx.roundRect(-3, -1.5, 6, 3, 1.5); cx.fill();
-      cx.restore();
+  // Batched per wire: one path/stroke (or fill) for every capsule instead of one save/restore
+  // each — same pixels, far fewer canvas calls on wire-dense maps.
+  cx.beginPath();
+  if (w.kind === 'fluid') {
+    for (let i = 0; i < count; i++) {
+      const p = pointAt(pts, cum, (offset + i * spacing) % len);
+      cx.moveTo(p.x + 2, p.y);
+      cx.arc(p.x, p.y, 2, 0, Math.PI * 2);
     }
+    cx.fillStyle = color;
+    cx.fill();
+  } else {
+    for (let i = 0; i < count; i++) {
+      const p = pointAt(pts, cum, (offset + i * spacing) % len);
+      const dx = Math.cos(p.a) * 3, dy = Math.sin(p.a) * 3;
+      cx.moveTo(p.x - dx, p.y - dy);
+      cx.lineTo(p.x + dx, p.y + dy);
+    }
+    cx.lineCap = 'round'; cx.lineWidth = 3; cx.strokeStyle = color;
+    cx.stroke();
+    cx.lineCap = 'butt';
   }
 }
 

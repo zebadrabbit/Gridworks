@@ -374,7 +374,13 @@ function drawWire(w, now) {
     strokePts(pts);
     cx.shadowBlur = 0;
     const cap = (w.kind === 'fluid' ? ctx.pipes[w.mark ?? 0].rate : ctx.belts[w.mark ?? 0].rate) / 60;
-    FX.flow(cx, w, pts, (w.flow ?? 0) / cap, 1 + (w.mark ?? 0) * 0.4, now, color);
+    // ponytail: bbox cull, no spatial index
+    const M = 10;
+    const vtl = toWorld(0, 0), vbr = toWorld(canvas.width, canvas.height);
+    let minX = pts[0].x, maxX = pts[0].x, minY = pts[0].y, maxY = pts[0].y;
+    for (const p of pts) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+    const onScreen = maxX >= vtl.x - M && minX <= vbr.x + M && maxY >= vtl.y - M && minY <= vbr.y + M;
+    if (onScreen) FX.flow(cx, w, pts, (w.flow ?? 0) / cap, 1 + (w.mark ?? 0) * 0.4, now, color);
   }
   cx.shadowBlur = 0;
   if (selected && w.style === 'straight') {
@@ -1049,6 +1055,7 @@ const HELP = [
   ['Long runs', 'mid-wire, click empty ground to drop a pole and keep going'],
   ['Recipes', 'select a machine, then the Recipe dropdown'],
   ['Minimap', 'click or drag to jump, hover for detail, − to collapse'],
+  ['⚙', 'settings — effects, wire style, seed, export / import, new map'],
 ];
 
 function buildHelp() {
@@ -1067,6 +1074,15 @@ function refreshHelp() {
   if (!box.classList.contains('open')) return;
   box.style.left =
     Math.min(document.getElementById('hud-help').getBoundingClientRect().left, innerWidth - 308) + 'px';
+}
+
+// mirrors refreshHelp: #settings' left offset is only computed on the click handler that opens
+// it, so a resize afterward leaves it clipped until the next toggle.
+function refreshSettings() {
+  const box = document.getElementById('settings');
+  if (!box.classList.contains('open')) return;
+  box.style.left =
+    Math.min(document.getElementById('hud-settings').getBoundingClientRect().left, innerWidth - 308) + 'px';
 }
 
 function refreshTutorial() {
@@ -1189,6 +1205,7 @@ async function main() {
   const startFresh = (seed) => {
     state = S.newGame(seed, ctx);
     lastPhase = state.elevator?.phase ?? 0;
+    lastMs = state.unlocked?.milestone ?? 0;
     seedAchievements();
     setMode('idle'); select(null); offerTutorial(); save(); buildPalette(); updateMilestonePanel();
   };
@@ -1220,6 +1237,7 @@ async function main() {
       if (!s) throw new Error('not a Gridworks save');
       state = s;
       lastPhase = state.elevator?.phase ?? 0;
+      lastMs = state.unlocked?.milestone ?? 0;
       seedAchievements();
       setMode('idle'); select(null); save(); buildPalette(); updateMilestonePanel();
       toast('Save imported');
@@ -1294,6 +1312,7 @@ async function main() {
   };
   setBox.addEventListener('change', (e) => {
     const el = e.target;
+    if (!el.dataset.key && el.name !== 'wireStyle') return;
     if (el.dataset.key) settings[el.dataset.key] = el.checked;
     else if (el.name === 'wireStyle') settings.wireStyle = el.value;
     saveSettings();
@@ -1301,7 +1320,7 @@ async function main() {
   document.getElementById('btn-tutorial').onclick = () => {
     setTut(null);
     setBox.classList.remove('open');
-    offer.classList.add('open');
+    toast('Tutorial will be offered on your next new map');
   };
   document.getElementById('hud-settings').onclick = () => {
     closeOthers('settings');
@@ -1333,6 +1352,7 @@ async function main() {
   setInterval(refreshAlerts, 400);
   setInterval(refreshAchievements, 400);
   setInterval(refreshHelp, 400);
+  setInterval(refreshSettings, 400);
   setInterval(refreshTutorial, 400);
   updateMilestonePanel();
   refreshAchievements();
