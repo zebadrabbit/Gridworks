@@ -35,4 +35,22 @@ s = loadSettings(globalThis.localStorage);
 assert.equal(s.manta, false);
 assert.equal('bogus' in s, false, 'unknown keys are not carried');
 
+const FX = await import('../src/fx.js');
+
+// --- flow: spacing tracks capacity ratio
+assert.equal(FX.spacingFor(0), 40);
+assert.equal(FX.spacingFor(1), 10);
+assert.equal(FX.spacingFor(2), 10, 'clamped above saturation');
+assert.ok(FX.spacingFor(0.25) > FX.spacingFor(0.5) && FX.spacingFor(0.5) > FX.spacingFor(0.75), 'monotone');
+
+// --- flow: path measurement and sampling
+const path = [{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 40 }];
+const { cum, len } = FX.pathLengths(path);
+assert.equal(len, 70);
+assert.deepEqual(cum, [0, 30, 70]);
+assert.deepEqual(FX.pointAt(path, cum, 15), { x: 15, y: 0, a: 0 });
+const p = FX.pointAt(path, cum, 50);
+assert.equal(p.x, 30); assert.equal(p.y, 20); assert.ok(Math.abs(p.a - Math.PI / 2) < 1e-9);
+assert.equal(Math.floor(len / FX.spacingFor(1)), 7, 'capsule count at saturation');
+
 console.log('all fx checks passed');

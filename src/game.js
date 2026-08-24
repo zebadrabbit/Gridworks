@@ -2,6 +2,7 @@
 import * as S from './sim.js';
 import { icon, meter, ICON_PATH } from './icons.js';
 import { settings, saveSettings } from './settings.js';
+import * as FX from './fx.js';
 
 const T = S.TILE;
 const SAVE_KEY = 'gridworks-save-v2';
@@ -350,13 +351,9 @@ function drawWire(w, now) {
   } else {
     cx.strokeStyle = color + '44';
     strokePts(pts);
-    if (w.flow > 0) { // marching ants
-      cx.strokeStyle = color;
-      cx.setLineDash([7, 7]);
-      cx.lineDashOffset = -(now / 40) * (1 + (w.mark ?? 0) * 0.4) % 14;
-      strokePts(pts);
-      cx.setLineDash([]);
-    }
+    cx.shadowBlur = 0;
+    const cap = (w.kind === 'fluid' ? ctx.pipes[w.mark ?? 0].rate : ctx.belts[w.mark ?? 0].rate) / 60;
+    FX.flow(cx, w, pts, (w.flow ?? 0) / cap, 1 + (w.mark ?? 0) * 0.4, now, color);
   }
   cx.shadowBlur = 0;
   if (selected && w.style === 'straight') {
