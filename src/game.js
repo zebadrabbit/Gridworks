@@ -1,26 +1,18 @@
 // game.js — canvas rendering + input. Logic lives in sim.js.
 import * as S from './sim.js';
 import { icon, meter, ICON_PATH } from './icons.js';
+import { settings, saveSettings } from './settings.js';
 
 const T = S.TILE;
 const SAVE_KEY = 'gridworks-save-v2';
-// display preference, so it lives in its own key rather than the save — it must survive
-// New Map and save import, which anything stored inside the save would not
-const MAP_KEY = 'gridworks-minimap';
-let mapOpen = localStorage.getItem(MAP_KEY) !== '0';
-// A display preference, not game state: it must survive New Map, or a returning player would be
-// re-taught on every world. Progress itself is derived, so nothing else needs persisting.
-// Three values, not a boolean: absent = never asked, 'go' = accepted and still following along,
-// 'skip' = dismissed for good. Without the middle value, reloading mid-tutorial would silently
-// lose the panel and a later New Map would re-offer, because "accepted" and "never asked" would
-// be the same state.
-const TUT_KEY = 'gridworks-tutorial';
-let tutState = localStorage.getItem(TUT_KEY); // null | 'go' | 'skip'
-const setTut = (v) => { tutState = v; localStorage.setItem(TUT_KEY, v); };
+// Display preferences live in settings.js (one localStorage key), never in the save — they must
+// survive New Map and save import. `tutorial` has three values, not a boolean: null = never
+// asked, 'go' = accepted and still following along, 'skip' = dismissed for good.
+const setTut = (v) => { settings.tutorial = v; saveSettings(); };
 // Applied at module scope, not only inside main()'s syncMap(), so a collapsed map is correct
 // on the very first paint — main() awaits a fetch before it gets to syncMap(), which would
 // otherwise flash the map open for a frame on every load (the fog toggle had this same bug).
-document.getElementById('inspector-map')?.classList.toggle('collapsed', !mapOpen);
+document.getElementById('inspector-map')?.classList.toggle('collapsed', !settings.mapOpen);
 const KIND_COLOR = { item: '#58d68d', fluid: '#5dade2', power: '#f4d03f', resource: '#e17055' };
 const TYPE_COLOR = {
   miner: '#f5a623', machine: '#4dd8ff', store: '#a29bfe',
@@ -45,7 +37,7 @@ document.body.appendChild(tip);
 let ctx, state;
 const cam = { x: 0, y: 0, z: 1 };
 const ui = { mode: 'idle', placeKey: null, wireFrom: null, sel: null, hover: null,
-  mouse: { x: 0, y: 0 }, drag: null, hint: '', wireStyle: 'noodle',
+  mouse: { x: 0, y: 0 }, drag: null, hint: '',
   paused: false, speed: 1 };
 
 // ------------------------------------------------------------------ geometry
@@ -385,7 +377,7 @@ function drawWirePreview() {
   const ok = over && S.canConnect(from.node, from.port.id, over.node, over.port.id, state, ctx);
   cx.strokeStyle = ok ? KIND_COLOR[from.port.kind] : (over ? '#ff7675' : KIND_COLOR[from.port.kind] + '66');
   cx.lineWidth = 2; cx.setLineDash([5, 5]);
-  strokePts(wirePath(p1, over ? portPos(over.node, over.port) : p2, { style: ui.wireStyle, pts: [] }));
+  strokePts(wirePath(p1, over ? portPos(over.node, over.port) : p2, { style: settings.wireStyle, pts: [] }));
   cx.setLineDash([]);
 }
 
@@ -413,7 +405,7 @@ function mmToWorld(e) {
 }
 
 function drawMinimap() {
-  if (!mapOpen) return;
+  if (!settings.mapOpen) return;
   mcx.clearRect(0, 0, mm.width, mm.height);
   // deposits, then buildings worst-last so one red machine is never painted over by a
   // healthy neighbour — clusters overlap at this scale, so draw order is the whole signal
@@ -557,7 +549,7 @@ function resolveWireClick(w) {
   if (over) {
     if (S.canConnect(a, from.port.id, over.node, over.port.id, state, ctx)) {
       const nw = S.addWire(state, a, from.port.id, over.node, over.port.id, ctx);
-      if (nw) nw.style = ui.wireStyle;
+      if (nw) nw.style = settings.wireStyle;
       setMode('idle');
       refreshInspector();
     }
@@ -579,7 +571,7 @@ function resolveWireClick(w) {
   const into = ports.find((p) => S.canConnect(a, from.port.id, pole, p.id, state, ctx));
   if (!into) { S.removeNode(state, pole.id); return; }
   const nw = S.addWire(state, a, from.port.id, pole, into.id, ctx);
-  if (nw) nw.style = ui.wireStyle;
+  if (nw) nw.style = settings.wireStyle;
   ui.wireFrom = { node: pole, port: ports.find((p) => p.id !== into.id) ?? into };
   refreshInspector();
 }
@@ -722,8 +714,9 @@ addEventListener('keydown', (e) => {
       const w = state.wires.find((q) => q.id === ui.sel.id);
       if (w) { w.style = w.style === 'straight' ? 'noodle' : 'straight'; select({ type: 'wire', id: w.id }); }
     } else {
-      ui.wireStyle = ui.wireStyle === 'straight' ? 'noodle' : 'straight';
-      ui.hint = `new wires: ${ui.wireStyle} · S to toggle`;
+      settings.wireStyle = settings.wireStyle === 'straight' ? 'noodle' : 'straight';
+      saveSettings();
+      ui.hint = `new wires: ${settings.wireStyle} · S to toggle`;
     }
   }
 });
@@ -1050,7 +1043,7 @@ function refreshHelp() {
 
 function refreshTutorial() {
   const box = document.getElementById('tutorial');
-  if (tutState !== 'go' || !box.classList.contains('open')) return;
+  if (settings.tutorial !== 'go' || !box.classList.contains('open')) return;
   const step = S.tutorialStep(state);
   const n = S.TUTORIAL.length;
   const sig = step ? step.id : 'done';
@@ -1141,7 +1134,7 @@ async function main() {
   const offer = document.getElementById('tut-offer');
   // offered on a fresh world only — never over an existing factory, which would be an
   // interruption rather than an introduction
-  const offerTutorial = () => { if (!tutState) offer.classList.add('open'); };
+  const offerTutorial = () => { if (!settings.tutorial) offer.classList.add('open'); };
   const loaded = load();
   state = loaded ?? S.newGame((Math.random() * 1e9) | 0, ctx);
   seedAchievements();
@@ -1217,13 +1210,13 @@ async function main() {
   const mapBox = document.getElementById('inspector-map');
   const mapBtn = document.getElementById('btn-map');
   const syncMap = () => {
-    mapBox.classList.toggle('collapsed', !mapOpen);
-    mapBtn.textContent = mapOpen ? '−' : '+';
+    mapBox.classList.toggle('collapsed', !settings.mapOpen);
+    mapBtn.textContent = settings.mapOpen ? '−' : '+';
   };
   syncMap();
   mapBtn.onclick = () => {
-    mapOpen = !mapOpen;
-    localStorage.setItem(MAP_KEY, mapOpen ? '1' : '0');
+    settings.mapOpen = !settings.mapOpen;
+    saveSettings();
     syncMap();
   };
 
@@ -1279,7 +1272,7 @@ async function main() {
     setTut('skip');
   };
   // someone who accepted and then reloaded is still mid-tutorial: reopen rather than re-offer
-  if (tutState === 'go') { tutBox.classList.add('open'); refreshTutorial(); }
+  if (settings.tutorial === 'go') { tutBox.classList.add('open'); refreshTutorial(); }
 
   setInterval(save, 5000);
   addEventListener('beforeunload', save);
