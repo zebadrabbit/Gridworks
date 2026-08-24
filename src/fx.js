@@ -61,3 +61,25 @@ export function drawPulses(cx, now) {
   }
   cx.globalAlpha = 1;
 }
+
+// ------------------------------------------------------------------ event bursts
+const MAX_PARTICLES = 200; // a save import that retro-toasts a dozen achievements cannot hitch
+const particles = [];
+export function burst(x, y, now) {
+  if (!settings.bursts) return;
+  const n = 12 + Math.floor(Math.random() * 9);
+  for (let i = 0; i < n && particles.length < MAX_PARTICLES; i++) {
+    const a = Math.random() * Math.PI * 2, v = 40 + Math.random() * 50;
+    particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t0: now, life: 600 + Math.random() * 300 });
+  }
+}
+export function drawParticles(cx, now) {
+  cx.fillStyle = '#4dd8ff';
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i], age = (now - p.t0) / 1000, k = age * 1000 / p.life;
+    if (k >= 1) { particles.splice(i, 1); continue; }
+    cx.globalAlpha = 1 - k;
+    cx.fillRect(p.x + p.vx * age - 1, p.y + p.vy * age - 1, 2, 2);
+  }
+  cx.globalAlpha = 1;
+}

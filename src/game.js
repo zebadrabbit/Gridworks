@@ -186,6 +186,7 @@ function draw(now) {
   if (ui.mode === 'wire' && ui.wireFrom) drawWirePreview();
   for (const n of state.nodes) drawNode(n);
   FX.drawPulses(cx, now);
+  FX.drawParticles(cx, now);
   if (ui.mode === 'place' && ui.placeKey) drawGhost();
   cx.restore();
   drawMinimap();
@@ -978,6 +979,14 @@ function refreshAlerts() {
   }
 }
 
+// World-space burst origin: the triggering node, else the HUB centre.
+function burstAt(node) {
+  const n = node ?? state.nodes.find((q) => q.key === 'the-hub');
+  if (!n) return;
+  const r = nodePx(n);
+  FX.burst(r.x + r.w / 2, r.y + r.h / 2, performance.now());
+}
+
 // Achievements are derived, so `seen` is a session-lifetime UI concern only — it exists to
 // decide what is NEW since the page loaded, and deliberately never enters the save. It must be
 // re-seeded whenever `state` is replaced, or a loaded or imported save toasts its whole history.
@@ -997,6 +1006,7 @@ function refreshAchievements() {
     // overlapping, both are legible, frame()'s toast fires first and carries the detail, and
     // suppressing just this category would make it silently different from the other seven.
     toast(`🏆 ${S.ACHIEVEMENTS.find((a) => a.id === id).name}`);
+    burstAt();
   }
   if (!box.classList.contains('open')) return;
   box.style.left = Math.min(chip.getBoundingClientRect().left, innerWidth - 308) + 'px';
@@ -1298,13 +1308,17 @@ async function main() {
   function frame(now) {
     acc += Math.min(0.5, (now - last) / 1000) * (ui.paused ? 0 : ui.speed); last = now;
     while (acc >= STEP) { S.tick(state, STEP, ctx); acc -= STEP; }
-    if ((state.unlocked?.milestone ?? 0) !== lastMs) { lastMs = state.unlocked?.milestone ?? 0; buildPalette(); }
+    if ((state.unlocked?.milestone ?? 0) !== lastMs) {
+      if (lastMs !== -1) burstAt();   // -1 is the pre-first-frame sentinel, not an unlock
+      lastMs = state.unlocked?.milestone ?? 0; buildPalette();
+    }
     const phase = state.elevator?.phase ?? 0;
     if (phase !== lastPhase) {
       lastPhase = phase;
       toast(phase >= S.ELEVATOR_PHASES.length
         ? '🚀 Project Assembly complete — you win!'
         : `Space Elevator phase ${phase} complete`);
+      burstAt(state.nodes.find((q) => q.key === 'space-elevator'));
     }
     draw(now);
     updateHud();
