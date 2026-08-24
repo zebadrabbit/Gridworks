@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-24 — Live inspector status + working bars
+
+- Inspector status line refreshes live; it used to freeze at selection time (a burner selected
+  before its fuel arrived read "no fuel" while generating).
+- Miners and generators get a progress bar that cycles once per unit mined / burned.
+
 ## 2026-08-24 — Palette polish + drag-to-place
 
 - Palette groups collapse (native `<details>`); a top button hides not-yet-unlocked buildings.
