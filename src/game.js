@@ -320,12 +320,18 @@ function drawNode(n) {
   cx.textAlign = 'center';
   cx.fillText(statusLine, r.x + r.w / 2, r.y + 25, r.w - 8);
 
-  if (def.type === 'machine' && n.recipe) {
+  // Progress bar. Machines have a real craft cycle; miners and generators run continuously,
+  // so their bar cycles once per unit mined / burned — it reads as "working", not "how far".
+  const fuel = def.type === 'generator' && Object.keys(def.burn ?? def.fuels ?? {}).find((k) => (n.buf[k] ?? 0) > 0);
+  const prog = def.type === 'machine' && n.recipe ? n.progress
+    : def.type === 'miner' && n.status === 'mining' ? (n.made ?? 0) % 1
+    : fuel ? 1 - (n.buf[fuel] % 1) : null;
+  if (prog != null) {
     const by = r.y + r.h - BAR_H;
     cx.fillStyle = '#152232';
     cx.fillRect(r.x + 8, by, r.w - 16, 5);
     cx.fillStyle = color;
-    cx.fillRect(r.x + 8, by, (r.w - 16) * Math.min(1, n.progress), 5);
+    cx.fillRect(r.x + 8, by, (r.w - 16) * Math.min(1, prog), 5);
   }
 
   const ports = S.portsOf(n, ctx);
