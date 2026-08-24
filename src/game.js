@@ -709,7 +709,7 @@ canvas.addEventListener('dblclick', (e) => {
 
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
-  if (e.key === 'Escape') { setMode('idle'); select(null); }
+  if (e.key === 'Escape') { setMode('idle'); select(null); document.getElementById('settings').classList.remove('open'); }
   if ((e.key === 'Delete' || e.key === 'Backspace') && ui.sel) {
     if (ui.sel.type === 'node') {
       const n = state.nodes.find((q) => q.id === ui.sel.id);
@@ -1256,7 +1256,7 @@ async function main() {
   const achBox = document.getElementById('achievements');
   // all three panels anchor to their own chip along the top of the screen, so two open at once
   // would overlap — opening any one closes the other two
-  const PANELS = ['alerts', 'achievements', 'help'];
+  const PANELS = ['alerts', 'achievements', 'help', 'settings'];
   const closeOthers = (keep) => {
     for (const id of PANELS) {
       if (id === keep) continue;
@@ -1284,6 +1284,30 @@ async function main() {
     document.getElementById('help').classList.toggle('open');
     document.getElementById('help').style.left =
       Math.min(document.getElementById('hud-help').getBoundingClientRect().left, innerWidth - 308) + 'px';
+  };
+
+  const setBox = document.getElementById('settings');
+  const syncSettings = () => {
+    for (const el of setBox.querySelectorAll('input[data-key]')) el.checked = settings[el.dataset.key];
+    for (const el of setBox.querySelectorAll('input[name=wireStyle]')) el.checked = settings.wireStyle === el.value;
+  };
+  setBox.addEventListener('change', (e) => {
+    const el = e.target;
+    if (el.dataset.key) settings[el.dataset.key] = el.checked;
+    else if (el.name === 'wireStyle') settings.wireStyle = el.value;
+    saveSettings();
+  });
+  document.getElementById('btn-tutorial').onclick = () => {
+    setTut(null);
+    setBox.classList.remove('open');
+    offer.classList.add('open');
+  };
+  document.getElementById('hud-settings').onclick = () => {
+    closeOthers('settings');
+    syncSettings();
+    setBox.classList.toggle('open');
+    setBox.style.left =
+      Math.min(document.getElementById('hud-settings').getBoundingClientRect().left, innerWidth - 308) + 'px';
   };
 
   // tutBox/offer were hoisted to the top of main() to avoid a temporal dead zone — see the
