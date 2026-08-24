@@ -61,8 +61,9 @@ Two changes, both inside the existing per-wire loop:
    That becomes `logisticBuf[res] / (number of sibling out-wires eligible for res)`, where
    eligible means the port's `res` equals `res` or (mode `any`) `res` is not in `excludes`. So a
    two-way split with one Item output doesn't waste a third of the flow on an output that will
-   never take it. Overflow wires share the **remaining** buffer (re-read after pass 1) among the
-   overflow siblings.
+   never take it. Overflow wires share what is left of the pre-tick snapshot after the
+   non-overflow outputs took their share (`snapshot − taken`, never a live re-read, so the result
+   does not depend on wire order) among the overflow siblings.
 
 `kindOf` and `dstPort.accepts` checks are unchanged. Belt rate caps are unchanged.
 

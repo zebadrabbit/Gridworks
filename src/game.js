@@ -524,7 +524,8 @@ function updateTooltip(e) {
   if (port) {
     const { node, port: p } = port;
     html = `<b>${icon(p.kind === 'resource' ? 'ore' : p.kind)}${p.dir === 'in' ? 'input' : 'output'}</b> · ${p.kind}`;
-    if (p.res) html += `<div class="dim">${ctx.names[p.res] ?? p.res}</div>`;
+    if (p.mode === 'overflow') html += `<div class="dim">overflow — only what the other outputs can't take</div>`;
+    else if (p.res) html += `<div class="dim">${ctx.names[p.res] ?? p.res}</div>`;
     else if (p.accepts) html += `<div class="dim">accepts: ${p.accepts.map((r) => ctx.names[r] ?? r).join(', ')}</div>`;
     html += `<div class="dim">${ctx.catalog[node.key].name}</div>`;
   } else {
@@ -881,6 +882,30 @@ function refreshInspector() {
       ${recipes.map((r) => `<option value="${r.key_name}" ${n.recipe === r.key_name ? 'selected' : ''}>${r.name}</option>`).join('')}
     </select><div class="dim" id="recipe-io"></div></section>`;
   }
+  if (def.type === 'logistic' && def.nOut > 1) {
+    // rule dropdowns: Any / Overflow / resources the factory currently has (this kind only)
+    const have = new Set();
+    for (const q of state.nodes) {
+      for (const k of Object.keys(q.buf ?? {})) if (q.buf[k] > 1e-6) have.add(k);
+      if (q.res) have.add(q.res);
+      if (q.depositRes) have.add(q.depositRes);
+    }
+    for (const f of n.filters ?? []) if (f?.res) have.add(f.res);
+    const items = [...have].filter((k) => ctx.names[k] && S.kindOf(k, ctx) === def.lkind)
+      .sort((a, b) => ctx.names[a].localeCompare(ctx.names[b]));
+    html += '<section>';
+    for (let i = 0; i < def.nOut; i++) {
+      const f = n.filters?.[i] ?? { mode: 'any' };
+      const cur = f.mode === 'item' ? f.res : f.mode;
+      html += `<label class="dim" for="filter${i}">Output ${i + 1}</label><select id="filter${i}" data-i="${i}">
+        <option value="any" ${cur === 'any' ? 'selected' : ''}>Any</option>
+        <option value="overflow" ${cur === 'overflow' ? 'selected' : ''}>Overflow</option>
+        <option disabled>──────</option>
+        ${items.map((k) => `<option value="${k}" ${cur === k ? 'selected' : ''}>${ctx.names[k]}</option>`).join('')}
+      </select>`;
+    }
+    html += '</section>';
+  }
   html += `<section id="bufs"></section>`;
   if (n.key !== 'the-hub') html += `<section><button class="danger" id="del">Delete (Del)</button></section>`;
   else html += `<section class="dim">Shipped:<div id="bufs2"></div></section>`;
@@ -895,6 +920,13 @@ function refreshInspector() {
         r.ingredients.map(([k, a]) => `${a} ${ctx.names[k] ?? k}`).join(' + ') + ' → ' +
         r.products.map(([k, a]) => `${a} ${ctx.names[k] ?? k}`).join(' + ') + ` (${r.time}s)`;
     }
+  }
+  for (const fs of box.querySelectorAll('select[data-i]')) {
+    fs.onchange = () => {
+      const v = fs.value;
+      S.setFilter(state, n, +fs.dataset.i, v === 'any' || v === 'overflow' ? { mode: v } : { mode: 'item', res: v }, ctx);
+      refreshInspector();
+    };
   }
   const del = box.querySelector('#del');
   if (del) del.onclick = () => { S.removeNode(state, n.id); select(null); };
@@ -1088,6 +1120,7 @@ const HELP = [
   ['Tidy a wire', 'straight wires bend: double-click to add a corner, drag it, Del removes it'],
   ['Long runs', 'mid-wire, click empty ground to drop a pole and keep going'],
   ['Recipes', 'select a machine, then the Recipe dropdown'],
+  ['Splitter rules', 'select a splitter — each output can be Any, Overflow, or one item'],
   ['Minimap', 'click or drag to jump, hover for detail, − to collapse'],
   ['⚙', 'settings — effects, wire style, seed, export / import, new map'],
 ];
