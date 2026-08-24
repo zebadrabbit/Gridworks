@@ -1297,4 +1297,79 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.equal(back.nodes.find((n) => n.id === merger.id).filters, undefined, 'filters stripped from a merger');
 }
 
+// smart splitter: routing
+{
+  const mk = () => {
+    const s = newGame(22, ctx);
+    s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+    s.unlocked.buildings = Object.keys(ctx.catalog); s.beltMark = ctx.belts.length - 1;
+    const src = addNode(s, 'storage-container', 2, 10, ctx);
+    const sp = addNode(s, 'splitter', 8, 10, ctx);
+    const boxes = [0, 1, 2].map((i) => addNode(s, 'storage-container', 14, 6 + i * 4, ctx));
+    assert.ok(addWire(s, src, 'out0', sp, 'in0', ctx));
+    return { s, src, sp, boxes };
+  };
+  const wireAll = (s, sp, boxes) => boxes.forEach((b, i) => assert.ok(addWire(s, sp, 'out' + i, b, 'in0', ctx), 'wire out' + i));
+  const run = (s, n = 600) => { for (let i = 0; i < n; i++) tick(s, 0.1, ctx); };
+  const only = (b, res) => Object.entries(b.buf).filter(([, v]) => v > 1e-6).map(([k]) => k).join() === res;
+
+  // sorting: item:iron / item:copper / any
+  {
+    const { s, src, sp, boxes } = mk();
+    src.buf = { 'iron-ore': 300, 'copper-ore': 300, screw: 300 };
+    setFilter(s, sp, 0, { mode: 'item', res: 'iron-ore' }, ctx);
+    setFilter(s, sp, 1, { mode: 'item', res: 'copper-ore' }, ctx);
+    wireAll(s, sp, boxes);
+    run(s);
+    assert.ok(only(boxes[0], 'iron-ore'), `box0 iron only: ${JSON.stringify(boxes[0].buf)}`);
+    assert.ok(only(boxes[1], 'copper-ore'), `box1 copper only: ${JSON.stringify(boxes[1].buf)}`);
+    assert.ok(only(boxes[2], 'screw'), `box2 screws only: ${JSON.stringify(boxes[2].buf)}`);
+    assert.ok(boxes[0].buf['iron-ore'] > 50 && boxes[2].buf.screw > 50, 'real throughput on every output');
+  }
+
+  // any excludes claimed; two any outputs share the unclaimed resource evenly
+  {
+    const { s, src, sp, boxes } = mk();
+    src.buf = { 'iron-ore': 300, 'copper-ore': 300 };
+    setFilter(s, sp, 0, { mode: 'item', res: 'iron-ore' }, ctx);
+    wireAll(s, sp, boxes);
+    run(s);
+    assert.ok(only(boxes[0], 'iron-ore'));
+    assert.equal(boxes[1].buf['iron-ore'] ?? 0, 0, 'iron never leaves an any port');
+    assert.equal(boxes[2].buf['iron-ore'] ?? 0, 0);
+    const c1 = boxes[1].buf['copper-ore'], c2 = boxes[2].buf['copper-ore'];
+    assert.ok(c1 > 50 && Math.abs(c1 - c2) < c1 * 0.05, `copper shared evenly ${c1} ${c2}`);
+  }
+
+  // overflow only when the others cannot take it
+  {
+    const { s, src, sp, boxes } = mk();
+    src.buf = { 'iron-ore': 2000 };
+    setFilter(s, sp, 1, { mode: 'overflow' }, ctx);
+    setFilter(s, sp, 2, { mode: 'overflow' }, ctx);
+    assert.ok(addWire(s, sp, 'out0', boxes[0], 'in0', ctx));
+    assert.ok(addWire(s, sp, 'out1', boxes[1], 'in0', ctx));
+    boxes[0].buf['iron-ore'] = ctx.catalog['storage-container'].cap - 20; // 20 of space left
+    run(s, 50); // 5s at full belt rate (> 20 units) — box0 fills, then overflow takes over
+    assert.ok(boxes[0].buf['iron-ore'] >= ctx.catalog['storage-container'].cap - 1e-6, 'primary filled first');
+    assert.ok((boxes[1].buf['iron-ore'] ?? 0) > 0, 'overflow received the surplus');
+    // and it received nothing while the primary still had room: total moved == 20 + overflow
+    const belt = ctx.belts[s.beltMark].rate / 60 * 0.1 * 50;
+    assert.ok(Math.abs((20 + boxes[1].buf['iron-ore']) - belt) < 1e-6, 'overflow got exactly what the primary could not');
+  }
+
+  // two overflow outputs share the surplus evenly
+  {
+    const { s, src, sp, boxes } = mk();
+    src.buf = { 'iron-ore': 2000 };
+    setFilter(s, sp, 1, { mode: 'overflow' }, ctx);
+    setFilter(s, sp, 2, { mode: 'overflow' }, ctx);
+    wireAll(s, sp, boxes);
+    boxes[0].buf['iron-ore'] = ctx.catalog['storage-container'].cap; // primary already full
+    run(s, 100);
+    const o1 = boxes[1].buf['iron-ore'], o2 = boxes[2].buf['iron-ore'];
+    assert.ok(o1 > 5 && Math.abs(o1 - o2) < 1e-6, `overflow shared evenly ${o1} ${o2}`);
+  }
+}
+
 console.log('all sim checks passed');
