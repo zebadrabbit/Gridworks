@@ -5,6 +5,8 @@ export const DEFAULTS = {
   wireStyle: 'noodle',   // default style for new wires
   mapOpen: true,
   tutorial: null,        // null = never asked | 'go' = following along | 'skip' = dismissed
+  palOpen: {},           // palette group title -> false when collapsed (absent = open)
+  hideLocked: false,     // palette: hide buildings not yet unlocked
 };
 const KEY = 'gw_settings';
 const OLD_MAP = 'gridworks-minimap', OLD_TUT = 'gridworks-tutorial';

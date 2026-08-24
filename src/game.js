@@ -600,20 +600,22 @@ function resolveWireClick(w) {
   refreshInspector();
 }
 
+// Build ui.placeKey centred on world point w; stays in place mode only when `again` (shift).
+function placeAt(w, again) {
+  const def = ctx.catalog[ui.placeKey];
+  const gx = Math.round(w.x / T - def.size / 2), gy = Math.round(w.y / T - def.size / 2);
+  const node = S.addNode(state, ui.placeKey, gx, gy, ctx);
+  if (node) {
+    select({ type: 'node', id: node.id });
+    if (!again) setMode('idle');
+  }
+}
+
 canvas.addEventListener('mousedown', (e) => {
   const w = toWorld(e.offsetX, e.offsetY);
   if (e.button === 1 || e.button === 2 || e.ctrlKey) { ui.drag = { pan: true, sx: e.clientX, sy: e.clientY }; return; }
 
-  if (ui.mode === 'place') {
-    const def = ctx.catalog[ui.placeKey];
-    const gx = Math.round(w.x / T - def.size / 2), gy = Math.round(w.y / T - def.size / 2);
-    const node = S.addNode(state, ui.placeKey, gx, gy, ctx);
-    if (node) {
-      select({ type: 'node', id: node.id });
-      if (!e.shiftKey) setMode('idle');
-    }
-    return;
-  }
+  if (ui.mode === 'place') { placeAt(w, e.shiftKey); return; }
 
   // in wire mode, mouseup does the work — swallow the press so it cannot fall through to
   // selection or to starting a pan drag
@@ -639,6 +641,8 @@ canvas.addEventListener('mousedown', (e) => {
 
 canvas.addEventListener('mousemove', (e) => {
   ui.mouse = toWorld(e.offsetX, e.offsetY);
+  // a palette drag arriving over the canvas becomes place mode; the ghost takes it from here
+  if (ui.palDrag && ui.mode !== 'place') setMode('place', ui.palDrag);
   if (ui.drag?.pan) {
     cam.x += e.clientX - ui.drag.sx; cam.y += e.clientY - ui.drag.sy;
     ui.drag.sx = e.clientX; ui.drag.sy = e.clientY;
@@ -661,6 +665,11 @@ addEventListener('mouseup', (e) => {
   // below clears ui.drag / ui.wireFrom. Wire mode is now modal (persists past mouseup), so this
   // no longer covers it — resolveWireClick refreshes precisely when it changes something instead.
   const fromCanvas = !!ui.drag;
+  if (ui.palDrag) {
+    // released over the canvas in place mode = drag-to-place; anywhere else just ends the drag
+    if (ui.mode === 'place' && e.target === canvas) placeAt(ui.mouse, e.shiftKey);
+    ui.palDrag = null;
+  }
   if (ui.drag?.node) {
     const n = ui.drag.node;
     const [nx, ny] = [n.x, n.y];
@@ -765,10 +774,19 @@ function buildPalette() {
   ];
   const pal = document.getElementById('palette');
   pal.innerHTML = '';
+  pal.classList.toggle('hide-locked', settings.hideLocked);
+  const filt = document.createElement('button');
+  filt.id = 'pal-filter';
+  filt.textContent = settings.hideLocked ? '🚫 locked hidden' : '👁 locked shown';
+  filt.onclick = () => { settings.hideLocked = !settings.hideLocked; saveSettings(); buildPalette(); };
+  pal.appendChild(filt);
   for (const [title, defs] of groups) {
-    const g = document.createElement('div');
+    // native <details> does the collapsing; only the open/closed state is ours to remember
+    const g = document.createElement('details');
     g.className = 'pal-group';
-    g.innerHTML = `<h3>${title}</h3>`;
+    g.open = settings.palOpen[title] !== false;
+    g.innerHTML = `<summary>${title}</summary>`;
+    g.addEventListener('toggle', () => { settings.palOpen[title] = g.open; saveSettings(); });
     for (const def of defs) {
       const el = document.createElement('div');
       const locked = !S.isUnlocked(state, def.key);
@@ -777,7 +795,10 @@ function buildPalette() {
       const meta = locked ? (S.MILESTONES.find((m) => m.rewards.buildings?.includes(def.key))?.name ?? '')
         : def.powerOut ? `+${def.powerOut}MW` : def.draw ? `${def.draw}MW` : '';
       el.innerHTML = `<span>${def.name}</span><small>${meta}</small>`;
+      // A drag that ends on the canvas never fires this: click goes to the common ancestor.
       el.onclick = () => setMode(ui.placeKey === def.key ? 'idle' : 'place', ui.placeKey === def.key ? null : def.key);
+      // drag-to-place: press here, drag onto the canvas, release to build (see canvas mousemove/up)
+      el.onmousedown = (e) => { if (e.button === 0) ui.palDrag = def.key; };
       g.appendChild(el);
     }
     pal.appendChild(g);
