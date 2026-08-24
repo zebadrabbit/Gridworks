@@ -174,6 +174,7 @@ function distToPath(pts, wx, wy) {
 
 function draw(now) {
   drawNow = now;
+  night = settings.dayNight ? FX.nightDepth(state.time ?? 0) : 0;
   canvas.width = innerWidth; canvas.height = innerHeight;
   cx.fillStyle = '#0a0c12';
   cx.fillRect(0, 0, canvas.width, canvas.height);
@@ -181,7 +182,13 @@ function draw(now) {
   cx.translate(cam.x, cam.y);
   cx.scale(cam.z, cam.z);
 
+  FX.manta(cx, state.time ?? 0, S.WORLD_W * T, S.WORLD_H * T);
   drawGrid();
+  cx.restore();
+  FX.nightTint(cx, canvas.width, canvas.height, night);   // darkens background, manta and grid only
+  cx.save();
+  cx.translate(cam.x, cam.y);
+  cx.scale(cam.z, cam.z);
   for (const w of state.wires) drawWire(w, now);
   if (ui.mode === 'wire' && ui.wireFrom) drawWirePreview();
   for (const n of state.nodes) drawNode(n);
@@ -221,7 +228,7 @@ function panel(x, y, w, h, edge, glow) {
   cx.roundRect(x, y, w, h, 6);
   cx.fillStyle = 'rgba(14,19,29,0.92)';
   cx.fill();
-  cx.shadowColor = edge; cx.shadowBlur = glow;
+  cx.shadowColor = edge; cx.shadowBlur = glow * (1 + night);
   cx.strokeStyle = edge; cx.lineWidth = 1.6 / cam.z + 0.4;
   cx.stroke();
   cx.shadowBlur = 0;
@@ -272,6 +279,7 @@ function portLink(node, port) {
 // state.nextId and are never reused, so stale entries are harmless. // ponytail: never pruned
 const lastLight = new Map();
 let drawNow = 0;
+let night = 0;
 
 function drawNode(n) {
   const def = ctx.catalog[n.key];
@@ -288,6 +296,7 @@ function drawNode(n) {
     cx.fillStyle = st.fill; cx.fill();
     cx.strokeStyle = st.edge; cx.lineWidth = 1.2; cx.setLineDash([4, 3]);
     cx.stroke(); cx.setLineDash([]);
+    FX.shimmer(cx, r.x, r.y, r.w, r.h, drawNow);
     cx.fillStyle = st.edge; cx.font = '9px monospace'; cx.textAlign = 'center';
     cx.fillText(ctx.names[n.res] ?? n.res, r.x + r.w / 2, r.y + r.h / 2 - 2);
     cx.fillText(n.purity, r.x + r.w / 2, r.y + r.h / 2 + 9);
@@ -356,7 +365,7 @@ function drawWire(w, now) {
   const color = KIND_COLOR[w.kind];
   const selected = ui.sel?.type === 'wire' && ui.sel.id === w.id;
   cx.lineWidth = selected ? 3.5 : (w.kind === 'fluid' ? 3 : 2);
-  cx.shadowColor = color; cx.shadowBlur = selected ? 10 : 5;
+  cx.shadowColor = color; cx.shadowBlur = (selected ? 10 : 5) * (1 + night);
   if (w.kind === 'power') {
     cx.strokeStyle = color + 'cc';
     strokePts(pts);

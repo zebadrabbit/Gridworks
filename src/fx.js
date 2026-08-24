@@ -83,3 +83,37 @@ export function drawParticles(cx, now) {
   }
   cx.globalAlpha = 1;
 }
+
+// ------------------------------------------------------------------ ambient
+export const CYCLE = 600; // seconds of game time per day
+export const nightDepth = (time) => (1 - Math.cos(2 * Math.PI * ((time % CYCLE) / CYCLE))) / 2;
+
+// Dark, soft blob drifting under the world on a slow Lissajous path. Purely ambient.
+export function manta(cx, time, worldW, worldH) {
+  if (!settings.manta) return;
+  const x = worldW / 2 + worldW * 0.42 * Math.sin(time / 97);
+  const y = worldH / 2 + worldH * 0.42 * Math.sin(time / 151);
+  const rx = 160, ry = 96; // ~10x6 tiles
+  const g = cx.createRadialGradient(x, y, 0, x, y, rx);
+  g.addColorStop(0, 'rgba(0,0,0,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  cx.save(); cx.translate(x, y); cx.scale(1, ry / rx); cx.translate(-x, -y);
+  cx.fillStyle = g; cx.fillRect(x - rx, y - rx, rx * 2, rx * 2);
+  cx.restore();
+}
+
+// Slow diagonal specular band across a deposit, ~4s period.
+export function shimmer(cx, x, y, w, h, now) {
+  if (!settings.dayNight) return;
+  const k = (now / 4000) % 1;
+  const g = cx.createLinearGradient(x - w + k * 2 * w, y, x + k * 2 * w, y + h);
+  g.addColorStop(0.45, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.15)'); g.addColorStop(0.55, 'rgba(255,255,255,0)');
+  cx.fillStyle = g;
+  cx.beginPath(); cx.roundRect(x + 2, y + 2, w - 4, h - 4, 8); cx.fill();
+}
+
+// Screen-space tint over the world; text and tile fills are drawn later and stay untouched.
+export function nightTint(cx, w, h, n) {
+  if (n <= 0) return;
+  cx.fillStyle = `rgba(4,6,20,${0.25 * n})`;
+  cx.fillRect(0, 0, w, h);
+}

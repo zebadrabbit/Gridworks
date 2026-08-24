@@ -53,4 +53,10 @@ const p = FX.pointAt(path, cum, 50);
 assert.equal(p.x, 30); assert.equal(p.y, 20); assert.ok(Math.abs(p.a - Math.PI / 2) < 1e-9);
 assert.equal(Math.floor(len / FX.spacingFor(1)), 7, 'capsule count at saturation');
 
+// --- day/night curve: 10-minute cycle, 0 at noon, 1 at midnight, continuous at the wrap
+assert.equal(FX.nightDepth(0), 0);
+assert.ok(Math.abs(FX.nightDepth(300) - 1) < 1e-9);
+assert.ok(Math.abs(FX.nightDepth(599.999) - FX.nightDepth(0)) < 1e-3, 'continuous across cycle boundary');
+assert.ok(FX.nightDepth(150) > 0.4 && FX.nightDepth(150) < 0.6);
+
 console.log('all fx checks passed');
