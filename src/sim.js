@@ -412,7 +412,15 @@ export function portsOf(node, ctx) {
                  accepts: ELEVATOR_ITEMS });
   } else if (def.type === 'logistic') {
     for (let i = 0; i < def.nIn; i++) inP('in' + i, def.lkind, null, i);
-    for (let i = 0; i < def.nOut; i++) outP('out' + i, def.lkind, null, i);
+    // Per-output rules (spec: smart splitter). `any` = anything no sibling claimed by item.
+    const filters = def.nOut > 1 ? (node.filters ?? []) : [];
+    const claimed = filters.filter((f) => f?.mode === 'item').map((f) => f.res);
+    for (let i = 0; i < def.nOut; i++) {
+      const f = filters[i] ?? { mode: 'any' };
+      if (f.mode === 'item') ports.push({ id: 'out' + i, dir: 'out', kind: def.lkind, res: f.res, side: 'E', idx: i, mode: 'item' });
+      else ports.push({ id: 'out' + i, dir: 'out', kind: def.lkind, res: null, side: 'E', idx: i, mode: f.mode,
+                        excludes: def.nOut > 1 ? claimed : undefined });
+    }
   }
   if (def.draw > 0) ports.push({ id: 'pin', dir: 'in', kind: 'power', res: null, side: 'N', idx: 0 });
   if (def.powerOut > 0) ports.push({ id: 'pout', dir: 'out', kind: 'power', res: null, side: 'N', idx: 1 });
@@ -432,6 +440,7 @@ export function canConnect(aNode, aPort, bNode, bPort, state, ctx) {
     if (pa.dir === pb.dir) return false;
     const [src, dst] = pa.dir === 'out' ? [pa, pb] : [pb, pa];
     if (src.res && dst.res && src.res !== dst.res) return false;
+    if (src.excludes && dst.res && src.excludes.includes(dst.res)) return false;
   }
   {
     const [sp, dp] = pa.dir === 'out' ? [pa, pb] : [pb, pa];
@@ -518,7 +527,11 @@ export function setRecipe(state, node, recipeKey, ctx) {
   node.recipe = recipeKey;
   node.progress = 0;
   node.buf = {};
-  // drop wires whose port no longer exists or no longer matches
+  reconcileWires(state, node, ctx);
+}
+
+// drop wires on `node` whose port no longer exists or no longer matches the far end
+export function reconcileWires(state, node, ctx) {
   state.wires = state.wires.filter((w) => {
     for (const end of [w.a, w.b]) {
       if (end.n !== node.id) continue;
@@ -530,12 +543,23 @@ export function setRecipe(state, node, recipeKey, ctx) {
     return true;
   });
 }
+
+// Splitter output rule. filter: { mode: 'any' } | { mode: 'item', res } | { mode: 'overflow' }.
+// Never touches buf — a stuck item is the player's to see in the inspector.
+export function setFilter(state, node, i, filter, ctx) {
+  node.filters ??= [];
+  node.filters[i] = filter;
+  reconcileWires(state, node, ctx);
+}
+
 function canConnectExisting(aNode, aPort, bNode, bPort, ctx) {
   const pa = getPort(aNode, aPort, ctx), pb = getPort(bNode, bPort, ctx);
   if (!pa || !pb || pa.kind !== pb.kind) return false;
   if (pa.kind !== 'power' && pa.res && pb.res && pa.res !== pb.res) return false;
   if (pa.accepts && pb.res && !pa.accepts.includes(pb.res)) return false;
   if (pb.accepts && pa.res && !pb.accepts.includes(pa.res)) return false;
+  const [sp, dp] = pa.dir === 'out' ? [pa, pb] : [pb, pa];
+  if (sp.excludes && dp.res && sp.excludes.includes(dp.res)) return false;
   return true;
 }
 
@@ -562,6 +586,15 @@ export function normalizeSave(raw, ctx) {
   // _fog is legacy: the fog-of-war cache it belonged to is gone, but saves written while fog
   // existed still carry it on every node, and nothing else strips it. Drop it on load.
   for (const n of s.nodes) { delete n._net; delete n._fog; }
+  for (const n of s.nodes) {
+    const def = ctx.catalog[n.key];
+    if (def.type !== 'logistic' || !(def.nOut > 1)) { delete n.filters; continue; }
+    if (!Array.isArray(n.filters)) { delete n.filters; continue; }
+    n.filters = n.filters.map((f) =>
+      f?.mode === 'overflow' ? { mode: 'overflow' }
+      : f?.mode === 'item' && ctx.names[f.res] ? { mode: 'item', res: f.res }
+      : { mode: 'any' });
+  }
   if (!s.nodes.some((n) => n.key === 'the-hub')) return null;
   return s;
 }

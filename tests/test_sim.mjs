@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H, ACHIEVEMENTS, earned, TUTORIAL, tutorialStep, HIST_LEN } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, setFilter, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H, ACHIEVEMENTS, earned, TUTORIAL, tutorialStep, HIST_LEN } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -1227,6 +1227,61 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.ok(madeAfter > madeBefore, 'miner kept mining between samples');
   assert.ok(Math.abs(miner.hist[1] - (madeAfter - madeBefore)) < 1e-9,
     'later sample equals the made delta accumulated over that second');
+}
+
+// smart splitter: rules on ports, wire reconcile, save round-trip
+{
+  const s = newGame(21, ctx);
+  s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+  s.unlocked.buildings = Object.keys(ctx.catalog);
+  const sp = addNode(s, 'splitter', 10, 10, ctx);
+  const smelter = addNode(s, 'smelter', 20, 10, ctx);
+  setRecipe(s, smelter, ctx.recipesByCat[ctx.catalog.smelter.cat].find((r) => r.name === 'Iron Ingot').key_name, ctx);
+  const ironIn = portsOf(smelter, ctx).find((p) => p.dir === 'in' && p.res === 'iron-ore');
+  assert.ok(ironIn, 'smelter has an iron-ore input');
+
+  // default: every out-port is any, unclaimed, no res
+  const outs = () => portsOf(sp, ctx).filter((p) => p.dir === 'out');
+  assert.deepEqual(outs().map((p) => p.mode), ['any', 'any', 'any']);
+  assert.deepEqual(outs().map((p) => p.excludes), [[], [], []]);
+
+  // item rule fixes res; siblings exclude it
+  setFilter(s, sp, 0, { mode: 'item', res: 'copper-ore' }, ctx);
+  assert.equal(outs()[0].res, 'copper-ore');
+  assert.equal(outs()[0].mode, 'item');
+  assert.deepEqual(outs()[1].excludes, ['copper-ore']);
+  assert.equal(outs()[1].res, null);
+
+  // overflow carries mode + excludes
+  setFilter(s, sp, 2, { mode: 'overflow' }, ctx);
+  assert.equal(outs()[2].mode, 'overflow');
+  assert.deepEqual(outs()[2].excludes, ['copper-ore']);
+
+  // a copper port cannot wire into an iron input; an any port can
+  assert.equal(addWire(s, sp, 'out0', smelter, ironIn.id, ctx), null, 'item:copper -> iron input refused');
+  const w = addWire(s, sp, 'out1', smelter, ironIn.id, ctx);
+  assert.ok(w, 'any -> iron input allowed');
+
+  // changing the wired port to item:copper drops the wire; to item:iron keeps it
+  setFilter(s, sp, 1, { mode: 'item', res: 'copper-ore' }, ctx);
+  assert.ok(!s.wires.some((q) => q.id === w.id), 'mismatched wire dropped on rule change');
+  const w2 = addWire(s, sp, 'out2', smelter, ironIn.id, ctx);
+  assert.ok(w2);
+  setFilter(s, sp, 2, { mode: 'item', res: 'iron-ore' }, ctx);
+  assert.ok(s.wires.some((q) => q.id === w2.id), 'matching wire kept on rule change');
+  sp.buf['iron-ore'] = 5;
+  setFilter(s, sp, 2, { mode: 'any' }, ctx);
+  assert.equal(sp.buf['iron-ore'], 5, 'rule change never touches buf');
+
+  // save round-trip; unknown res falls back to any; filters ignored on non-splitters
+  const merger = addNode(s, 'merger', 30, 10, ctx);
+  merger.filters = [{ mode: 'item', res: 'iron-ore' }];
+  sp.filters[1] = { mode: 'item', res: 'not-a-thing' };
+  const back = normalizeSave(JSON.parse(JSON.stringify(s)), ctx);
+  const sp2 = back.nodes.find((n) => n.id === sp.id);
+  assert.deepEqual(sp2.filters[0], { mode: 'item', res: 'copper-ore' });
+  assert.deepEqual(sp2.filters[1], { mode: 'any' }, 'unknown res -> any');
+  assert.equal(back.nodes.find((n) => n.id === merger.id).filters, undefined, 'filters stripped from a merger');
 }
 
 console.log('all sim checks passed');
