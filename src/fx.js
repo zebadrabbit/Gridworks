@@ -21,20 +21,10 @@ export function pointAt(pts, cum, d) {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, a: Math.atan2(b.y - a.y, b.x - a.x) };
 }
 
-// ponytail: cache keyed by wire id + point count + endpoints; wires are re-sampled when moved.
-const pathCache = new Map();
-function measured(w, pts) {
-  const key = `${pts.length}:${pts[0].x},${pts[0].y}:${pts[pts.length - 1].x},${pts[pts.length - 1].y}`;
-  const c = pathCache.get(w.id);
-  if (c && c.key === key) return c;
-  const m = { key, ...pathLengths(pts) };
-  pathCache.set(w.id, m);
-  return m;
-}
-
+// ponytail: path measured every frame; ~33 hypot per wire is cheaper than a correct cache key
 export function flow(cx, w, pts, ratio, speedMul, now, color) {
   if (!settings.flow || !(ratio > 0)) return;
-  const { cum, len } = measured(w, pts);
+  const { cum, len } = pathLengths(pts);
   const spacing = spacingFor(ratio);
   const count = Math.floor(len / spacing);
   if (count < 1) return;
