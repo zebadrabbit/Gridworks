@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-24 — Juice: effects layer + settings panel
+
+- Flow capsules (bubbles on pipes) replace marching ants; spacing tracks the belt's share of
+  capacity, speed tracks its mark. A saturated belt reads as a train, a trickle as a blip.
+- A node's status light change fires one expanding ring in the new colour; steady tiles never
+  animate. Milestones, elevator phases, achievements and the win burst particles.
+- Ten-minute game-time day/night: the field dims a little, glows widen, labels stay legible.
+  Deposits shimmer. A faint manta shadow drifts under the world.
+- ⚙ settings panel: five effect toggles, default wire style, replay tutorial, seed, Export /
+  Import / New Map. All display preferences now live in one `gw_settings` key; the old minimap
+  and tutorial keys migrate on first load. The HUD keeps only what you act on while playing.
+- New `src/fx.js`, `src/settings.js`, `tests/test_fx.mjs` (`node tests/test_fx.mjs`). `sim.js`
+  and the save format are unchanged.
+
 ## 2026-08-23 — Tile I/O layers
 
 - **Layered port layout.** A side with a single port reads as layers — input in the upper half of
