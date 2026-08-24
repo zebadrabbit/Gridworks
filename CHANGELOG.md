@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-24 — Palette polish + drag-to-place
+
+- Palette groups collapse (native `<details>`); a top button hides not-yet-unlocked buildings.
+  Both persist in `gw_settings`.
+- Thin themed scrollbars on every scrolling panel.
+- Drag a palette item onto the canvas and release to build; click-to-place is unchanged.
+
 ## 2026-08-24 — Juice: effects layer + settings panel
 
 - Flow capsules (bubbles on pipes) replace marching ants; spacing tracks the belt's share of
