@@ -708,8 +708,9 @@ canvas.addEventListener('dblclick', (e) => {
 });
 
 addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') document.getElementById('settings').classList.remove('open');
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
-  if (e.key === 'Escape') { setMode('idle'); select(null); document.getElementById('settings').classList.remove('open'); }
+  if (e.key === 'Escape') { setMode('idle'); select(null); }
   if ((e.key === 'Delete' || e.key === 'Backspace') && ui.sel) {
     if (ui.sel.type === 'node') {
       const n = state.nodes.find((q) => q.id === ui.sel.id);
