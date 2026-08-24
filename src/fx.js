@@ -41,3 +41,23 @@ export function flow(cx, w, pts, ratio, speedMul, now, color) {
     }
   }
 }
+
+// ------------------------------------------------------------------ status pulses
+// One expanding ring per status *change*; a steady tile never animates.
+const PULSE_MS = 500;
+const pulses = [];
+export function pulse(rect, color, now) {
+  if (!settings.pulses) return;
+  pulses.push({ ...rect, color, t0: now });
+}
+export function drawPulses(cx, now) {
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const p = pulses[i], k = (now - p.t0) / PULSE_MS;
+    if (k >= 1) { pulses.splice(i, 1); continue; }
+    const grow = 8 * k;
+    cx.globalAlpha = 1 - k;
+    cx.strokeStyle = p.color; cx.lineWidth = 2;
+    cx.beginPath(); cx.roundRect(p.x - grow, p.y - grow, p.w + 2 * grow, p.h + 2 * grow, 6 + grow); cx.stroke();
+  }
+  cx.globalAlpha = 1;
+}

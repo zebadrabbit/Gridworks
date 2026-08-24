@@ -173,6 +173,7 @@ function distToPath(pts, wx, wy) {
 // ----------------------------------------------------------------- rendering
 
 function draw(now) {
+  drawNow = now;
   canvas.width = innerWidth; canvas.height = innerHeight;
   cx.fillStyle = '#0a0c12';
   cx.fillRect(0, 0, canvas.width, canvas.height);
@@ -184,6 +185,7 @@ function draw(now) {
   for (const w of state.wires) drawWire(w, now);
   if (ui.mode === 'wire' && ui.wireFrom) drawWirePreview();
   for (const n of state.nodes) drawNode(n);
+  FX.drawPulses(cx, now);
   if (ui.mode === 'place' && ui.placeKey) drawGhost();
   cx.restore();
   drawMinimap();
@@ -264,10 +266,19 @@ function portLink(node, port) {
   return { res, flow, attached };
 }
 
+// Last-seen light per node id, for pulses. Cleared whenever `state` is replaced so a loaded
+// save does not fire a ring per node; a node's first frame sets without pulsing. Ids come from
+// state.nextId and are never reused, so stale entries are harmless. // ponytail: never pruned
+const lastLight = new Map();
+let drawNow = 0;
+
 function drawNode(n) {
   const def = ctx.catalog[n.key];
   const r = nodePx(n);
   const light = S.lightOf(n, def);
+  const prev = lastLight.get(n.id);
+  if (prev !== undefined && prev !== light) FX.pulse(r, LIGHT_COLOR[light] ?? TYPE_COLOR[def.type], drawNow);
+  lastLight.set(n.id, light);
   const color = LIGHT_COLOR[light] ?? TYPE_COLOR[def.type] ?? '#4dd8ff';
 
   if (def.type === 'deposit') {
@@ -971,7 +982,7 @@ function refreshAlerts() {
 // decide what is NEW since the page loaded, and deliberately never enters the save. It must be
 // re-seeded whenever `state` is replaced, or a loaded or imported save toasts its whole history.
 let seen = new Set();
-function seedAchievements() { seen = new Set(S.earned(state)); }
+function seedAchievements() { seen = new Set(S.earned(state)); lastLight.clear(); }
 
 function refreshAchievements() {
   const chip = document.getElementById('hud-achievements');
