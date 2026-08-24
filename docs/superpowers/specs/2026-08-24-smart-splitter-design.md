@@ -63,7 +63,9 @@ Two changes, both inside the existing per-wire loop:
    That becomes `logisticBuf[res] / (number of sibling out-wires eligible for res)`, where
    eligible means the port's `res` equals `res` or (mode `any`) `res` is not in `excludes`. So a
    two-way split with one Item output doesn't waste a third of the flow on an output that will
-   never take it. Overflow wires share what is left of the pre-tick snapshot after the
+   never take it. When the node has an overflow output, a non-overflow sibling whose destination
+   has no room this tick is dropped from that count, so an open sibling takes its share before
+   anything overflows. Overflow wires share what is left of the pre-tick snapshot after the
    non-overflow outputs took their share (`snapshot − taken`, never a live re-read, so the result
    does not depend on wire order) among the overflow siblings.
 
