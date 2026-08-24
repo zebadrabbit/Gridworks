@@ -1354,8 +1354,58 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
     assert.ok(boxes[0].buf['iron-ore'] >= ctx.catalog['storage-container'].cap - 1e-6, 'primary filled first');
     assert.ok((boxes[1].buf['iron-ore'] ?? 0) > 0, 'overflow received the surplus');
     // and it received nothing while the primary still had room: total moved == 20 + overflow
+    // (the splitter itself may still be holding up to one tick's worth in flight)
     const belt = ctx.belts[s.beltMark].rate / 60 * 0.1 * 50;
-    assert.ok(Math.abs((20 + boxes[1].buf['iron-ore']) - belt) < 1e-6, 'overflow got exactly what the primary could not');
+    assert.ok(Math.abs((20 + boxes[1].buf['iron-ore'] + (sp.buf['iron-ore'] ?? 0)) - belt) < 1e-6,
+      'overflow got exactly what the primary could not');
+  }
+
+  // overflow-last holds even when the feed wire is added AFTER the splitter's out-wires
+  // (player drags the outputs first, or deletes and redraws the input belt)
+  {
+    const s = newGame(22, ctx);
+    s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+    s.unlocked.buildings = Object.keys(ctx.catalog); s.beltMark = ctx.belts.length - 1;
+    const src = addNode(s, 'storage-container', 2, 10, ctx);
+    const sp = addNode(s, 'splitter', 8, 10, ctx);
+    const boxes = [0, 1, 2].map((i) => addNode(s, 'storage-container', 14, 6 + i * 4, ctx));
+    setFilter(s, sp, 1, { mode: 'overflow' }, ctx);
+    setFilter(s, sp, 2, { mode: 'overflow' }, ctx);
+    assert.ok(addWire(s, sp, 'out0', boxes[0], 'in0', ctx));
+    assert.ok(addWire(s, sp, 'out1', boxes[1], 'in0', ctx));
+    assert.ok(addWire(s, src, 'out0', sp, 'in0', ctx)); // feed wire added LAST, after both out-wires
+    src.buf = { 'iron-ore': 2000 };
+    boxes[0].buf['iron-ore'] = ctx.catalog['storage-container'].cap - 20; // 20 of space left
+    run(s, 200);
+    assert.ok(boxes[0].buf['iron-ore'] >= ctx.catalog['storage-container'].cap - 1e-6,
+      'primary filled first (feed wire added last)');
+    assert.ok((boxes[1].buf['iron-ore'] ?? 0) > 0, 'overflow received the surplus (feed wire added last)');
+    const belt = ctx.belts[s.beltMark].rate / 60 * 0.1 * 200;
+    assert.ok(Math.abs((20 + boxes[1].buf['iron-ore'] + (sp.buf['iron-ore'] ?? 0)) - belt) < 1e-6,
+      'overflow got exactly what the primary could not (feed wire added last)');
+  }
+
+  // chained overflow: sp1 has no primary consumer, so its overflow carries everything into
+  // sp2's feed; sp2's own overflow (out1) must still wait for sp2's primary (out0 -> A) to fill
+  {
+    const s = newGame(22, ctx);
+    s.nodes = s.nodes.filter((n) => n.key === 'the-hub'); s.wires = [];
+    s.unlocked.buildings = Object.keys(ctx.catalog); s.beltMark = ctx.belts.length - 1;
+    const src = addNode(s, 'storage-container', 2, 10, ctx);
+    const sp1 = addNode(s, 'splitter', 8, 10, ctx);
+    const sp2 = addNode(s, 'splitter', 14, 10, ctx);
+    const boxA = addNode(s, 'storage-container', 20, 6, ctx);
+    const boxB = addNode(s, 'storage-container', 20, 14, ctx);
+    assert.ok(addWire(s, src, 'out0', sp1, 'in0', ctx));
+    setFilter(s, sp1, 1, { mode: 'overflow' }, ctx);
+    assert.ok(addWire(s, sp1, 'out1', sp2, 'in0', ctx)); // sp2 is fed by an overflow port
+    setFilter(s, sp2, 1, { mode: 'overflow' }, ctx);
+    assert.ok(addWire(s, sp2, 'out0', boxA, 'in0', ctx));
+    assert.ok(addWire(s, sp2, 'out1', boxB, 'in0', ctx));
+    src.buf = { 'iron-ore': 2000 };
+    run(s, 300);
+    assert.ok(boxA.buf['iron-ore'] > 100, `A gets sp1's overflow via sp2's primary: ${boxA.buf['iron-ore']}`);
+    assert.equal(boxB.buf['iron-ore'] ?? 0, 0, 'B (sp2 overflow) gets nothing while A never fills');
   }
 
   // two overflow outputs share the surplus evenly

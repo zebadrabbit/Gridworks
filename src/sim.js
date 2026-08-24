@@ -797,21 +797,28 @@ export function tick(state, dt, ctx) {
   const byId = Object.fromEntries(state.nodes.map((n) => [n.id, n]));
   const outWires = {};
   for (const w of state.wires) if (w.kind === 'item' || w.kind === 'fluid') (outWires[w.a.n] ??= []).push(w);
+  // ponytail: per-tick memo — srcPortOf/isOverflow/carries would otherwise re-run getPort ->
+  // portsOf per wire per lookup (~1700x/tick on 200 wires); cache the source port per wire
+  // object for the duration of this tick.
+  const portMemo = new Map();
+  const srcPortOf = (w) => {
+    if (!portMemo.has(w)) { const s = byId[w.a.n]; portMemo.set(w, s ? getPort(s, w.a.p, ctx) : null); }
+    return portMemo.get(w);
+  };
   // Overflow outputs run after every other wire so they see only what nobody else could take.
   // ponytail: two passes over a sorted list, not an evaluation graph.
-  const srcPortOf = (w) => { const s = byId[w.a.n]; return s && getPort(s, w.a.p, ctx); };
   const isOverflow = (w) => srcPortOf(w)?.mode === 'overflow';
   const ordered = [...state.wires.filter((w) => !isOverflow(w)), ...state.wires.filter(isOverflow)];
-  // Fair-share for a logistic node's siblings is read from a snapshot of that node's buffer,
-  // taken lazily on first use *per node, per pass* rather than once eagerly for the whole
-  // tick. Lazy-per-node still stops siblings within the same pass cannibalising a live buffer
-  // that shrinks as they run (the reason to snapshot at all) — the first sibling to run takes
-  // the snapshot before any of its siblings have touched the buffer. But it also lets a node
-  // see supply it already received earlier in the SAME pass, e.g. its own inbound wire, which
-  // is ordered before its outbound wires. An eager pre-tick snapshot for the primary pass,
-  // paired with the overflow pass's live pass-boundary snapshot, let overflow permanently
-  // out-race the primary for that same-tick inflow (see task-2 report for the traced case).
-  const passBuf = [{}, {}]; // [0] primary pass, [1] overflow pass — node id -> buf snapshot
+  // Every logistic node's buffer is snapshotted once, eagerly, before either pass runs — the
+  // pre-rewrite timing, so a plain (non-overflow) splitter gets back its exact old behaviour.
+  // Pass 0 (primary) shares from `pre[node][res]` directly; pass 1 (overflow) shares whatever
+  // pass 0 didn't actually withdraw (`pre - taken`), not a live re-read of the buffer — so
+  // overflow can no longer out-race the primary for supply that lands mid-tick, regardless of
+  // wire array order or whether the node's own feed is itself an overflow-sourced wire. This
+  // costs one tick of latency per hop on both passes, matching the pre-Task-2 belt behaviour.
+  const pre = {};
+  for (const n of state.nodes) if (ctx.catalog[n.key].type === 'logistic') pre[n.id] = { ...n.buf };
+  const taken = {}; // node id -> res -> amount pass 0 withdrew, for pass 1's leftover math
   // can this out-wire carry `res`? (fixed res, or an any/overflow port that hasn't excluded it)
   const carries = (w, res) => {
     const p = srcPortOf(w);
@@ -824,11 +831,10 @@ export function tick(state, dt, ctx) {
     if (wire.kind === 'power') continue;
     const src = byId[wire.a.n], dst = byId[wire.b.n];
     if (!src || !dst) continue;
-    const srcPort = getPort(src, wire.a.p, ctx);
+    const srcPort = srcPortOf(wire);
     const dstPort = getPort(dst, wire.b.p, ctx);
     if (!srcPort || !dstPort) continue;
     const pass = srcPort.mode === 'overflow' ? 1 : 0;
-    if (ctx.catalog[src.key].type === 'logistic' && !(src.id in passBuf[pass])) passBuf[pass][src.id] = { ...src.buf };
     const res = srcPort.res ?? dstPort.res ??
       Object.keys(src.buf)
         .filter((k) => src.buf[k] > 1e-9 && kindOf(k, ctx) === wire.kind &&
@@ -845,16 +851,20 @@ export function tick(state, dt, ctx) {
       : BUF_CAP - (dst.buf[res] ?? 0);
     // ponytail: proportional split each tick, not whole-unit round-robin — same steady-state rates.
     // A logistic source shares among the sibling outputs that can actually carry `res`, in the
-    // same pass (overflow siblings split what pass 1 left behind).
+    // same pass (overflow siblings split what pass 0 actually left behind).
     let share;
     if (ctx.catalog[src.key].type === 'logistic') {
       const sibs = (outWires[src.id] ?? []).filter((w) => isOverflow(w) === (pass === 1) && carries(w, res));
-      const pool = passBuf[pass][src.id]?.[res];
-      share = (pool ?? 0) / Math.max(1, sibs.length);
+      const avail = pre[src.id]?.[res] ?? 0;
+      const pool = pass === 1 ? avail - (taken[src.id]?.[res] ?? 0) : avail;
+      share = Math.max(0, pool) / Math.max(1, sibs.length);
     } else share = src.buf[res] ?? 0;
     const amt = Math.min(rate * dt, share, Math.max(0, space), src.buf[res] ?? 0);
     if (amt <= 1e-9) continue;
     src.buf[res] -= amt;
+    if (pass === 0 && ctx.catalog[src.key].type === 'logistic') {
+      (taken[src.id] ??= {})[res] = (taken[src.id][res] ?? 0) + amt;
+    }
     if (dstDef.type === 'hub') {
       state.shipped[res] = (state.shipped[res] ?? 0) + amt;
       state.msProgress[res] = (state.msProgress[res] ?? 0) + amt;
