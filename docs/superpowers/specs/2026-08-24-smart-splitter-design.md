@@ -45,9 +45,11 @@ Mergers are untouched. Nothing in this spec applies to a 1-out logistic node (po
   an `item:copper` port from wiring into an iron smelter, and the transfer loop's existing
   `srcPort.res` precedence carries it.
 - `mode`: `'any' | 'item' | 'overflow'`.
-- `excludes` (mode `any` and `overflow` only): the set of resources claimed by sibling Item
+- `excludes` (mode `any` only): the set of resources claimed by sibling Item
   ports. The transfer loop's resource picker skips these, and a wire whose destination port has
-  a fixed `res` in `excludes` moves nothing.
+  a fixed `res` in `excludes` moves nothing. An overflow port has no `excludes`: it carries
+  whatever the non-overflow outputs left, claimed or not — an item whose Item output is blocked
+  is exactly what overflow exists for.
 
 ### Transfer loop
 

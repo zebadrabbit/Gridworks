@@ -1255,7 +1255,7 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   // overflow carries mode + excludes
   setFilter(s, sp, 2, { mode: 'overflow' }, ctx);
   assert.equal(outs()[2].mode, 'overflow');
-  assert.deepEqual(outs()[2].excludes, ['copper-ore']);
+  assert.equal(outs()[2].excludes, undefined, 'overflow ports never exclude');
 
   // a copper port cannot wire into an iron input; an any port can
   assert.equal(addWire(s, sp, 'out0', smelter, ironIn.id, ctx), null, 'item:copper -> iron input refused');
@@ -1268,8 +1268,14 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   const copperIn = portsOf(smelter2, ctx).find((p) => p.dir === 'in' && p.res === 'copper-ore');
   assert.ok(copperIn);
   assert.equal(addWire(s, sp, 'out1', smelter2, copperIn.id, ctx), null, 'any port excluding copper refuses a copper input');
+  // an overflow port has no excludes, so it may wire into an input fixed to a claimed res —
+  // that res is exactly what overflow must carry once the Item output blocks
+  const w4 = addWire(s, sp, 'out2', smelter2, copperIn.id, ctx);
+  assert.ok(w4, 'overflow -> an input fixed to a claimed res allowed');
+  removeWire(s, w4.id);
   // and a sibling claiming a res later drops an existing any-port wire into that res
   setFilter(s, sp, 0, { mode: 'any' }, ctx);           // release copper
+  setFilter(s, sp, 2, { mode: 'any' }, ctx);           // out2 back to any: excludes is an any-port rule
   const w3 = addWire(s, sp, 'out2', smelter2, copperIn.id, ctx);
   assert.ok(w3, 'unclaimed copper: any -> copper input allowed');
   setFilter(s, sp, 0, { mode: 'item', res: 'copper-ore' }, ctx); // claim it again
@@ -1471,8 +1477,9 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
     assert.equal(boxes[2].buf['copper-ore'] ?? 0, 0, 'copper never overflows: its own primary has room');
     assert.ok(boxes[1].buf['copper-ore'] > 50, 'copper kept flowing to its primary');
   }
-  // ...and a res claimed by an `item` sibling never reaches an overflow port at all: `excludes`
-  // covers mode overflow too (portsOf), so iron/copper/overflow leaves the overflow port idle.
+  // ...and the same holds when both primaries are `item` rules: an overflow port has no
+  // `excludes`, so a claimed res reaches it once its own Item output blocks — while the res
+  // whose primary still has room never does.
   {
     const { s, src, sp, boxes } = mk();
     src.buf = { 'iron-ore': 1000, 'copper-ore': 1000 };
@@ -1482,7 +1489,10 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
     wireAll(s, sp, boxes);
     boxes[0].buf['iron-ore'] = CAP - 20;
     run(s, 100);
-    assert.deepEqual(boxes[2].buf, {}, 'an item-claimed res is excluded from the overflow port');
+    assert.ok(boxes[0].buf['iron-ore'] >= CAP - 1e-6, 'the iron primary filled first');
+    assert.ok((boxes[2].buf['iron-ore'] ?? 0) > 0, 'iron overflows once its own Item output blocks');
+    assert.equal(boxes[2].buf['copper-ore'] ?? 0, 0, 'copper never overflows: its own primary has room');
+    assert.ok(boxes[1].buf['copper-ore'] > 50, 'copper kept flowing to its primary');
   }
 
   // fluid path: a pipe splitter sorts two fluids and the any port sees nothing unclaimed

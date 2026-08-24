@@ -418,8 +418,10 @@ export function portsOf(node, ctx) {
     for (let i = 0; i < def.nOut; i++) {
       const f = filters[i] ?? { mode: 'any' };
       if (f.mode === 'item') ports.push({ id: 'out' + i, dir: 'out', kind: def.lkind, res: f.res, side: 'E', idx: i, mode: 'item' });
+      // An overflow port gets no `excludes`: it carries whatever the non-overflow outputs left,
+      // claimed or not — a blocked item output is exactly what overflow exists for.
       else ports.push({ id: 'out' + i, dir: 'out', kind: def.lkind, res: null, side: 'E', idx: i, mode: f.mode,
-                        excludes: def.nOut > 1 ? claimed : undefined });
+                        excludes: f.mode === 'any' && def.nOut > 1 ? claimed : undefined });
     }
   }
   if (def.draw > 0) ports.push({ id: 'pin', dir: 'in', kind: 'power', res: null, side: 'N', idx: 0 });
