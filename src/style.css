@@ -6,8 +6,7 @@ html, body { height: 100%; overflow: hidden; background: #0a0c12; color: #cfd8e3
 #hud { position: fixed; top: 0; left: 0; right: 0; height: 42px; display: flex;
   align-items: center; gap: 20px; padding: 0 14px; background: rgba(10,13,20,.85);
   border-bottom: 1px solid #1d2733; backdrop-filter: blur(4px); z-index: 10; }
-#hud .logo { font-weight: 300; letter-spacing: 3px; color: #4dd8ff; }
-#hud .logo b { font-weight: 700; color: #e8f6ff; }
+#hud .logo { height: 20px; display: block; }
 #hud .spacer { flex: 1; }
 #hud-hint { color: #7a8aa0; font-size: 12px; }
 #hud-power { color: #f4d03f; }

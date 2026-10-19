@@ -197,7 +197,7 @@ launch renders them all, so this is the default.
    inline `⚡` emoji `data:` icon. An emoji favicon renders as whatever glyph
    the user's OS happens to have, which is a different picture on every platform
    and no picture at all on some Linux desktops.
-5. **The HUD lockup** — `index.html` sets its logo as
+5. **The HUD lockup** — DONE 2026-10-18: `index.html` now uses `brand/wordmark.svg` at 20 px. Originally it set its logo as
    `<span class="logo">GRID<b>WORKS</b></span>` in the system font. That is the
    same two-tone split the wordmark uses, so it already reads as the brand;
    swapping in `brand/wordmark.svg` at 20 px would make it exact. Either is

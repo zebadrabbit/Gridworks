@@ -9,6 +9,7 @@
 - `favicon/` at the repo root replaces the inline ⚡ emoji icon, which rendered as a
   different glyph on every OS. Linked with relative paths so it works from any base URL.
 - README leads with the hero and the catalogue figure.
+- The HUD logo is the wordmark SVG at 20px instead of styled system-font text.
 
 ## 2026-08-24 — Smart splitter rules
 
