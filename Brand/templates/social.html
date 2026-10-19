@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gridworks — social &amp; repo pack</title>
+<style>
+/*__TOKENS__*/
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--g-void); color: var(--g-ink);
+  font-family: var(--g-sans); font-size: var(--g-t-base); line-height: var(--g-lh-body); }
+header { padding: 40px 32px 26px; background: var(--g-surface);
+  border-bottom: 1px solid var(--g-line); }
+header h1 { font-size: var(--g-t-2xl); margin: 0 0 6px; font-weight: 300;
+  letter-spacing: var(--g-track-display); text-transform: uppercase; color: var(--g-cyan-lit); }
+header p { margin: 0; color: var(--g-ink-2); max-width: 70ch; }
+header code { font-family: var(--g-mono); color: var(--g-cyan); }
+main { padding: 28px 32px 80px; display: flex; flex-direction: column; gap: 30px; }
+section.item { background: var(--g-surface); border: 1px solid var(--g-line);
+  border-radius: var(--g-r-lg); overflow: hidden; }
+.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border-bottom: 1px solid var(--g-line); background: var(--g-panel); }
+.bar b { font-size: var(--g-t-sm); font-weight: 600; }
+.bar code { font-family: var(--g-mono); font-size: var(--g-t-xs); color: var(--g-ink-3); }
+.bar .sp { flex: 1; }
+button { font: inherit; font-size: var(--g-t-xs); letter-spacing: var(--g-track-label);
+  text-transform: uppercase; padding: 7px 12px; border-radius: var(--g-r-sm);
+  border: 1px solid var(--g-line-2); background: var(--g-panel); color: var(--g-cyan);
+  cursor: pointer; }
+button:hover { background: #17324A; box-shadow: var(--g-glow-sm); }
+.stage { padding: 20px; display: flex; justify-content: center;
+  background: repeating-conic-gradient(var(--g-void) 0 25%, #0f141d 0 50%) 50%/22px 22px; }
+.stage svg { max-width: 100%; height: auto; display: block;
+  box-shadow: 0 2px 18px #000a; border-radius: 2px; }
+.note { padding: 0 16px 14px; font-size: var(--g-t-sm); color: var(--g-ink-3); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Gridworks — social &amp; repo pack</h1>
+  <p>Every card below is real SVG at its exact platform size. Export vector or
+     raster from the buttons; nothing is uploaded anywhere, the rasterising
+     happens in this page. The catalogue figure is generated from the game's
+     own source, not drawn — see <code>src/gen_arch.py</code>.</p>
+</header>
+<main id="main"></main>
+
+<script>
+/*__LOGO__*/
+/*__ARCH__*/
+
+const PAL = {
+  void:'#0A0C12', surface:'#0E1420', panel:'#12202C', sunk:'#152232',
+  line:'#1D2733', line2:'#23445C',
+  ink:'#CFD8E3', ink2:'#9FB0C3', ink3:'#7A8AA0', ink4:'#5B6B80',
+  cyan:'#4DD8FF', lit:'#E8F6FF', cyanInk:'#0A6A88', deep:'#1C6E8C',
+  green:'#58D68D', amber:'#F4D03F', coral:'#FF7675',
+  paper:'#EEF3F8', paperInk:'#101720', paperInk2:'#41505F'
+};
+const SANS = "'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif";
+const MONO = "'JetBrains Mono','IBM Plex Mono',ui-monospace,'SF Mono',Consolas,monospace";
+const G = LOGO.geometry, W = LOGO.wordmark;
+const TILE = ARCH.world.tile;
+
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/* ---- brand primitives, all driven by the generated geometry ---- */
+function markInner(fill, o) {
+  o = o || {};
+  let s = '';
+  if (!o.simple && o.lattice) s += `<path d="${G.lattice}" fill="${o.lattice}" opacity=".55"/>`;
+  if (!o.simple) s += `<path d="${G.pads}" fill="${fill}"/>`;
+  s += `<path d="${G.wire}" fill="${fill}"/>`;
+  if (!o.simple) {
+    s += `<path d="${G.cores}" fill="${o.detail || PAL.lit}"/>`;
+    s += `<circle cx="${G.hub.cx}" cy="${G.hub.cy}" r="${G.hub.r}" fill="${o.detail || PAL.lit}"/>`;
+  }
+  return s;
+}
+function mark(x, y, size, fill, o) {
+  return `<g transform="translate(${x},${y}) scale(${size / 100})">${markInner(fill, o)}</g>`;
+}
+function word(x, y, size, gridFill, worksFill) {
+  const k = size / W.cap;
+  return `<g transform="translate(${x},${y}) scale(${k})">`
+    + `<path d="${W.grid}" fill="${gridFill}"/><path d="${W.works}" fill="${worksFill}"/></g>`;
+}
+const wordWidth = size => W.width * size / W.cap;
+
+/* Horizontal lockup, returned with its measured width so callers can centre it. */
+function lockup(x, y, size, gridFill, worksFill, markFill, o) {
+  const ms = size * 1.55, gap = size * 0.42, w = ms + gap + wordWidth(size);
+  return {
+    svg: mark(x, y, ms, markFill, o)
+       + word(x + ms + gap, y + ms * 0.5 + size * 0.5, size, gridFill, worksFill),
+    w: w, h: ms
+  };
+}
+function text(x, y, str, o) {
+  o = o || {};
+  return `<text x="${x}" y="${y}" fill="${o.fill || PAL.ink}" font-family="${o.mono ? MONO : SANS}"`
+    + ` font-size="${o.size || 20}" font-weight="${o.weight || 400}"`
+    + (o.spacing ? ` letter-spacing="${o.spacing}"` : '')
+    + (o.anchor ? ` text-anchor="${o.anchor}"` : '') + `>${esc(str)}</text>`;
+}
+function rect(x, y, w, h, fill, r, stroke, sw) {
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"`
+    + (r ? ` rx="${r}"` : '') + (stroke ? ` stroke="${stroke}" stroke-width="${sw || 1}"` : '') + '/>';
+}
+/* The one repeating motif in the system: the world grid, at the world's own
+   tile size. Every background below is on it. */
+function worldGrid(w, h, colour, op, step) {
+  step = step || TILE;
+  let d = '';
+  for (let x = step; x < w; x += step) d += `M ${x} 0 L ${x} ${h} `;
+  for (let y = step; y < h; y += step) d += `M 0 ${y} L ${w} ${y} `;
+  return `<path d="${d}" stroke="${colour}" stroke-width="1" opacity="${op}" fill="none"/>`;
+}
+/* A run of wire with a node at each end — the game's core gesture. */
+function wire(pts, colour, w, node) {
+  w = w || 3; node = node == null ? 6 : node;
+  const d = 'M ' + pts.map(p => p[0] + ' ' + p[1]).join(' L ');
+  return `<path d="${d}" stroke="${colour}" stroke-width="${w}" fill="none"`
+    + ` stroke-linecap="round" stroke-linejoin="round"/>`
+    + pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="${node}" fill="${colour}"/>`).join('');
+}
+
+/* ---------------------------------------------------------------- cards */
+const CARDS = [];
+function card(id, w, h, label, note, render) { CARDS.push({ id, w, h, label, note, render }); }
+
+/* --- GitHub ---------------------------------------------------------- */
+card('gh-social-preview', 1280, 640, 'GitHub social preview',
+  'Settings → General → Social preview.', () => {
+  const L = lockup(0, 0, 78, PAL.cyan, PAL.lit, PAL.cyan, { lattice: PAL.deep });
+  let s = rect(0, 0, 1280, 640, PAL.void);
+  s += worldGrid(1280, 640, PAL.line, 0.9);
+  s += rect(0, 0, 1280, 8, PAL.cyan);
+  s += `<g transform="translate(${(1280 - L.w) / 2},150)">${L.svg}</g>`;
+  s += text(640, 424, 'A grid idler about wiring a factory together.',
+    { size: 33, fill: PAL.ink2, anchor: 'middle' });
+  s += text(640, 486, 'deposits  ·  wires  ·  milestones  ·  one very long belt',
+    { size: 21, fill: PAL.ink3, anchor: 'middle', spacing: 2.4, mono: true });
+  s += wire([[430, 552], [530, 552], [560, 582], [720, 582], [750, 552], [850, 552]], PAL.cyan, 3, 7);
+  return s;
+});
+
+card('gh-hero', 1280, 400, 'README hero banner',
+  'Top of the repository README.', () => {
+  const L = lockup(0, 0, 62, PAL.cyan, PAL.lit, PAL.cyan, { lattice: PAL.deep });
+  let s = rect(0, 0, 1280, 400, PAL.void);
+  s += worldGrid(1280, 400, PAL.line, 1);
+  s += mark(940, -60, 500, PAL.surface, { simple: true });
+  s += `<g transform="translate(80,84)">${L.svg}</g>`;
+  s += text(80, 288, 'Click a port, pan, click again. The run draws itself.',
+    { size: 26, fill: PAL.ink2 });
+  s += text(80, 330, 'runs in a browser tab · keeps running when the tab is closed',
+    { size: 17, fill: PAL.cyan, mono: true, spacing: 1.1 });
+  s += rect(0, 392, 1280, 8, PAL.cyan);
+  return s;
+});
+
+card('gh-catalogue', 1280, 720, 'Catalogue figure — MEASURED',
+  'Generated from src/sim.js and data/source/satisfactory_data.json by src/gen_arch.py. Not drawn.', () => {
+  const c = ARCH.catalog, t = ARCH.totals, w = ARCH.world;
+  let s = rect(0, 0, 1280, 720, PAL.void);
+  s += worldGrid(1280, 720, PAL.line, 1);
+  s += text(56, 60, 'how a rock becomes a space elevator', { size: 30, weight: 600, fill: PAL.lit });
+  s += text(56, 90, 'measured from the source at build time — every count below is read out of the game',
+    { size: 15, fill: PAL.ink3 });
+
+  /* --- the chain ---------------------------------------------------- */
+  const CHAIN = [
+    ['DEPOSIT', c.resources + ' resources', PAL.amber],
+    ['MINER', c.miners + ' marks', PAL.cyan],
+    ['MACHINE', c.buildings + ' buildings', PAL.cyan],
+    ['LOGISTICS', 'belt Mk.' + t.beltMarks + ' · pipe Mk.' + t.pipeMarks, PAL.cyan],
+    ['THE HUB', t.milestones + ' milestones', PAL.green],
+  ];
+  const BW = 196, BH = 66, y0 = 148, gapx = 30;
+  CHAIN.forEach((b, i) => {
+    const x = 56 + i * (BW + gapx);
+    s += rect(x, y0, BW, BH, PAL.surface, 8, b[2], 1.5);
+    s += text(x + 16, y0 + 28, b[0], { size: 13, weight: 700, fill: b[2], spacing: 1.8 });
+    s += text(x + 16, y0 + 50, b[1], { size: 13, mono: true, fill: PAL.ink2 });
+    if (i < CHAIN.length - 1) {
+      const my = y0 + BH / 2;
+      s += wire([[x + BW, my], [x + BW + gapx, my]], PAL.cyan, 3, 5);
+    }
+  });
+  s += text(56, y0 - 16, 'THE CHAIN', { size: 12, fill: PAL.ink3, spacing: 2.2, weight: 600 });
+  s += text(56, y0 + BH + 32, c.recipes + ' recipes · ' + c.items + ' items · ' + c.fluids
+    + ' fluids · ' + c.belts + ' belt marks · ' + c.pipes + ' pipe marks in the source data',
+    { size: 14, mono: true, fill: PAL.ink3 });
+
+  /* --- the ladder, one rung per measured milestone -------------------- */
+  const LX = 56, LY = 300, RH = 40, RW = 560;
+  s += text(LX, LY - 14, 'THE LADDER', { size: 12, fill: PAL.ink3, spacing: 2.2, weight: 600 });
+  ARCH.milestones.forEach((m, i) => {
+    const y = LY + i * (RH + 8);
+    s += rect(LX, y, RW, RH, PAL.surface, 6, PAL.line2, 1.5);
+    s += rect(LX, y, 4, RH, PAL.cyan);
+    s += text(LX + 18, y + 26, (i + 1) + '.  ' + m.name, { size: 15, weight: 600, fill: PAL.ink });
+    const gain = m.buildings.length + (m.buildings.length === 1 ? ' building' : ' buildings')
+      + (m.beltMark ? ' · belt Mk.' + m.beltMark : '') + (m.pipeMark ? ' · pipe Mk.' + m.pipeMark : '');
+    s += text(LX + RW - 18, y + 26, gain, { size: 12, mono: true, fill: PAL.ink3, anchor: 'end' });
+  });
+
+  /* --- project assembly, one row per measured phase --------------------
+     Rows rather than columns on purpose: phase costs are item names, and item
+     names in this game run to "adaptive control unit". Four columns across
+     524px gives each one 117px, which silently clips the longest name in
+     every phase — the failure mode a generated figure is supposed to remove,
+     not introduce. A row can be as wide as its longest cost list. */
+  const PX = 700, PY = 300, PW = 524;
+  s += text(PX, PY - 14, 'PROJECT ASSEMBLY', { size: 12, fill: PAL.ink3, spacing: 2.2, weight: 600 });
+  const PH = 50;
+  ARCH.phases.forEach((p, i) => {
+    const y = PY + i * (PH + 8);
+    s += rect(PX, y, PW, PH, PAL.surface, 6, PAL.line2, 1.5);
+    s += rect(PX, y, 4, PH, PAL.green);
+    s += text(PX + 18, y + 22, 'PHASE ' + (i + 1) + '  ·  ' + p.name,
+      { size: 15, weight: 600, fill: PAL.ink });
+    s += text(PX + 18, y + 40,
+      Object.keys(p.cost).map(k => p.cost[k] + '× ' + k.replace(/-/g, ' ')).join('  ·  '),
+      { size: 11, mono: true, fill: PAL.ink3 });
+  });
+  const EY = PY + ARCH.phases.length * (PH + 8) + 16;
+  s += rect(PX, EY, PW, 82, PAL.surface, 8, PAL.green, 1.5);
+  s += text(PX + 18, EY + 34, 'SPACE ELEVATOR', { size: 17, weight: 700, fill: PAL.lit, spacing: 2 });
+  s += text(PX + 18, EY + 60, t.achievements + ' achievements · ' + t.tutorial
+    + '-step guided start · ' + t.startUnlocked + ' buildings unlocked at t=0',
+    { size: 12, mono: true, fill: PAL.ink3 });
+  s += wire([[PX + PW / 2, PY + ARCH.phases.length * (PH + 8) - 8], [PX + PW / 2, EY]],
+    PAL.green, 3, 5);
+
+  s += `<path d="M 56 646 L 1224 646" stroke="${PAL.line2}" stroke-width="1"/>`;
+  s += text(56, 680, w.w + '×' + w.h + ' world · ' + w.tile + 'px tiles · '
+    + t.milestones + ' milestones · ' + t.unlockables + ' unlockable buildings · '
+    + t.phases + ' phases · ' + t.achievements + ' achievements',
+    { size: 14, mono: true, fill: PAL.ink3 });
+  s += text(1224, 680, 'MEASURED, NOT DRAWN',
+    { size: 12, fill: PAL.cyan, anchor: 'end', spacing: 2, weight: 600 });
+  return s;
+});
+
+/* --- social ----------------------------------------------------------- */
+card('so-og', 1200, 630, 'Open Graph / link preview', 'og:image for the site and shared links.', () => {
+  const L = lockup(0, 0, 68, PAL.cyan, PAL.lit, PAL.cyan, { lattice: PAL.deep });
+  let s = rect(0, 0, 1200, 630, PAL.void);
+  s += worldGrid(1200, 630, PAL.line, 1);
+  s += mark(790, 150, 380, PAL.surface, { simple: true });
+  s += rect(0, 0, 1200, 8, PAL.cyan);
+  s += `<g transform="translate(80,150)">${L.svg}</g>`;
+  s += text(80, 400, 'Wire it up.', { size: 60, weight: 600, fill: PAL.lit });
+  s += text(80, 470, 'Walk away. It keeps going.', { size: 60, weight: 600, fill: PAL.cyan });
+  s += text(80, 536, 'offline progress · capped at 8h · autosaves to your browser',
+    { size: 18, mono: true, fill: PAL.ink3 });
+  return s;
+});
+
+card('so-x-banner', 1500, 500, 'X / Bluesky profile banner',
+  'The avatar covers roughly the lower-left 180px — the lockup is placed clear of it.', () => {
+  let s = rect(0, 0, 1500, 500, PAL.void);
+  s += worldGrid(1500, 500, PAL.line, 1);
+  s += mark(1020, -40, 460, PAL.surface, { simple: true });
+  const L = lockup(0, 0, 56, PAL.cyan, PAL.lit, PAL.cyan, { lattice: PAL.deep });
+  s += `<g transform="translate(300,146)">${L.svg}</g>`;
+  s += text(300, 318, 'a grid idler about wiring a factory together', { size: 22, fill: PAL.ink2 });
+  s += text(300, 356, 'github.com/zebadrabbit/Gridworks', { size: 17, mono: true, fill: PAL.cyan });
+  s += wire([[300, 392], [420, 392], [452, 420], [600, 420]], PAL.cyan, 3, 6);
+  return s;
+});
+
+card('so-linkedin-banner', 1128, 191, 'LinkedIn banner',
+  'Check LinkedIn’s current crop before using this — it changes.', () => {
+  let s = rect(0, 0, 1128, 191, PAL.void);
+  s += worldGrid(1128, 191, PAL.line, 1, 24);
+  s += rect(0, 0, 1128, 5, PAL.cyan);
+  const L = lockup(0, 0, 34, PAL.cyan, PAL.lit, PAL.cyan, { lattice: PAL.deep });
+  s += `<g transform="translate(52,44)">${L.svg}</g>`;
+  // Set off the measured lockup width, not a guessed x. The wordmark's advance
+  // comes out of logo.py, so a change to the tracking there would otherwise
+  // slide the letters under this line without anything failing.
+  s += text(52 + L.w + 42, 104, 'a grid idler about wiring a factory together',
+    { size: 18, fill: PAL.ink2 });
+  s += mark(950, 6, 176, PAL.surface, { simple: true });
+  return s;
+});
+
+card('so-avatar', 512, 512, 'Avatar — void', 'Profile picture, the default.', () => {
+  let s = rect(0, 0, 512, 512, PAL.void);
+  s += worldGrid(512, 512, PAL.line, 1);
+  s += mark(96, 96, 320, PAL.cyan, { lattice: PAL.deep });
+  return s;
+});
+card('so-avatar-cyan', 512, 512, 'Avatar — cyan',
+  'Where it needs to pop against a light or busy timeline.', () => {
+  let s = rect(0, 0, 512, 512, PAL.cyan);
+  s += mark(96, 96, 320, PAL.void, { simple: true });
+  return s;
+});
+card('so-discord-icon', 512, 512, 'Discord server icon',
+  'Discord crops to a circle — the mark is inset for it.', () => {
+  let s = rect(0, 0, 512, 512, PAL.void);
+  s += `<circle cx="256" cy="256" r="256" fill="${PAL.surface}"/>`;
+  s += mark(112, 112, 288, PAL.cyan, { simple: true });
+  return s;
+});
+
+card('so-discord-banner', 960, 540, 'Discord server banner', '', () => {
+  let s = rect(0, 0, 960, 540, PAL.void);
+  s += worldGrid(960, 540, PAL.line, 1);
+  s += mark(560, 60, 400, PAL.surface, { simple: true });
+  const L = lockup(0, 0, 50, PAL.cyan, PAL.lit, PAL.cyan, { lattice: PAL.deep });
+  s += `<g transform="translate(64,178)">${L.svg}</g>`;
+  s += text(64, 330, 'post your seed. compare factories.', { size: 23, fill: PAL.ink2 });
+  return s;
+});
+
+card('so-square', 1080, 1080, 'Square feature card',
+  'Instagram / Mastodon. Swap the two lines of copy per post.', () => {
+  let s = rect(0, 0, 1080, 1080, PAL.void);
+  s += worldGrid(1080, 1080, PAL.line, 1);
+  s += rect(0, 0, 1080, 12, PAL.cyan);
+  s += mark(300, 180, 480, PAL.cyan, { lattice: PAL.deep });
+  s += text(540, 796, 'ship it to the HUB,', { size: 58, weight: 600, anchor: 'middle', fill: PAL.lit });
+  s += text(540, 868, 'climb the ladder', { size: 58, weight: 600, anchor: 'middle', fill: PAL.cyan });
+  s += text(540, 936, ARCH.totals.milestones + ' milestones · ' + ARCH.totals.phases
+    + ' phases · ' + ARCH.catalog.recipes + ' recipes',
+    { size: 21, mono: true, fill: PAL.ink3, anchor: 'middle' });
+  const L = lockup(0, 0, 28, PAL.cyan, PAL.lit, PAL.cyan, { simple: true });
+  s += `<g transform="translate(${(1080 - L.w) / 2},986)">${L.svg}</g>`;
+  return s;
+});
+
+/* ---------------------------------------------------------------- render */
+const svgOf = c =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${c.w}" height="${c.h}" viewBox="0 0 ${c.w} ${c.h}">${c.render()}</svg>`;
+
+function download(name, blob) {
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = u; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(u), 4000);
+}
+function saveSVG(c) {
+  download(c.id + '.svg', new Blob([svgOf(c)], { type: 'image/svg+xml' }));
+}
+function savePNG(c, scale) {
+  const img = new Image();
+  const blob = new Blob([svgOf(c)], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  img.onload = () => {
+    const cv = document.createElement('canvas');
+    cv.width = c.w * scale; cv.height = c.h * scale;
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    cv.toBlob(b => download(`${c.id}-${c.w * scale}x${c.h * scale}.png`, b));
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+
+const main = document.getElementById('main');
+CARDS.forEach(c => {
+  const sec = document.createElement('section');
+  sec.className = 'item';
+  sec.innerHTML =
+    `<div class="bar"><b>${esc(c.label)}</b><code>${c.w}×${c.h}</code><span class="sp"></span>
+       <button data-a="svg">SVG</button><button data-a="p1">PNG @1×</button><button data-a="p2">PNG @2×</button></div>
+     <div class="stage">${svgOf(c)}</div>` +
+    (c.note ? `<p class="note">${esc(c.note)}</p>` : '');
+  sec.querySelector('[data-a="svg"]').onclick = () => saveSVG(c);
+  sec.querySelector('[data-a="p1"]').onclick = () => savePNG(c, 1);
+  sec.querySelector('[data-a="p2"]').onclick = () => savePNG(c, 2);
+  main.appendChild(sec);
+});
+</script>
+</body>
+</html>

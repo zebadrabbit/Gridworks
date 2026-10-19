@@ -1,0 +1,173 @@
+{
+ "world": {
+  "tile": 32,
+  "w": 720,
+  "h": 480,
+  "startRadius": 40
+ },
+ "catalog": {
+  "buildings": 12,
+  "miners": 5,
+  "belts": 6,
+  "pipes": 2,
+  "items": 136,
+  "fluids": 15,
+  "recipes": 272,
+  "resources": 13
+ },
+ "startUnlocked": [
+  "miner-mk1",
+  "smelter",
+  "constructor",
+  "biomass-burner",
+  "storage-container",
+  "splitter",
+  "merger",
+  "pipe-splitter",
+  "pipe-merger",
+  "the-hub",
+  "power-pole",
+  "conveyor-pole",
+  "pipe-pole"
+ ],
+ "milestones": [
+  {
+   "name": "Part Assembly",
+   "cost": {
+    "iron-plate": 100,
+    "iron-rod": 100
+   },
+   "buildings": [
+    "assembler"
+   ],
+   "beltMark": 1,
+   "pipeMark": null
+  },
+  {
+   "name": "Screws & Wire",
+   "cost": {
+    "screw": 500,
+    "wire": 300,
+    "copper-ingot": 100
+   },
+   "buildings": [
+    "miner-mk2"
+   ],
+   "beltMark": null,
+   "pipeMark": null
+  },
+  {
+   "name": "Coal Power",
+   "cost": {
+    "reinforced-iron-plate": 50,
+    "rotor": 25,
+    "cable": 100
+   },
+   "buildings": [
+    "coal-generator",
+    "water-extractor",
+    "fluid-buffer"
+   ],
+   "beltMark": null,
+   "pipeMark": null
+  },
+  {
+   "name": "Basic Steel",
+   "cost": {
+    "concrete": 300,
+    "copper-sheet": 150
+   },
+   "buildings": [
+    "foundry"
+   ],
+   "beltMark": 2,
+   "pipeMark": null
+  },
+  {
+   "name": "Oil Processing",
+   "cost": {
+    "steel-beam": 100,
+    "steel-pipe": 100
+   },
+   "buildings": [
+    "oil-pump",
+    "oil-refinery",
+    "fuel-generator",
+    "packager"
+   ],
+   "beltMark": 3,
+   "pipeMark": 1
+  },
+  {
+   "name": "Advanced Manufacturing",
+   "cost": {
+    "plastic": 200,
+    "rubber": 200,
+    "modular-frame": 25
+   },
+   "buildings": [
+    "manufacturer",
+    "miner-mk3"
+   ],
+   "beltMark": 4,
+   "pipeMark": null
+  },
+  {
+   "name": "High Tech",
+   "cost": {
+    "computer": 50,
+    "smart-plating": 20
+   },
+   "buildings": [
+    "blender",
+    "nuclear-power-plant",
+    "accelerator",
+    "converter",
+    "quantum-encoder",
+    "space-elevator"
+   ],
+   "beltMark": 5,
+   "pipeMark": null
+  }
+ ],
+ "phases": [
+  {
+   "name": "Platform",
+   "cost": {
+    "smart-plating": 50
+   }
+  },
+  {
+   "name": "Construction",
+   "cost": {
+    "smart-plating": 100,
+    "versatile-framework": 100
+   }
+  },
+  {
+   "name": "Systems",
+   "cost": {
+    "versatile-framework": 200,
+    "automated-wiring": 100,
+    "modular-engine": 50
+   }
+  },
+  {
+   "name": "Assembly",
+   "cost": {
+    "modular-engine": 100,
+    "adaptive-control-unit": 50
+   }
+  }
+ ],
+ "totals": {
+  "milestones": 7,
+  "phases": 4,
+  "achievements": 11,
+  "tutorial": 5,
+  "startUnlocked": 13,
+  "unlockables": 18,
+  "beltMarks": 5,
+  "pipeMarks": 1
+ }
+}

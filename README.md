@@ -1,5 +1,7 @@
 # Gridworks
 
+![Gridworks](Brand/github/hero-1280x400.png)
+
 A Satisfactory-themed grid idler in the visual style of Upload Labs: deposits are fixed
 nodes you wire to miners, machines, containers, and power on a neon grid, and watch
 resources flow. Long runs are drawn in one gesture — click a port, pan, and click to drop
@@ -18,6 +20,8 @@ the inspector tracks your factory's health across a 720×480 world.
 Milestones and Project Assembly phases award achievements, tracked by a 🏆 counter in the HUD.
 Existing saves keep the map they were generated on; use "New Map" to regenerate at the current
 world size.
+
+![What the game is built from, measured from the source at build time](Brand/github/catalogue-1280x720.png)
 
 `data/source/satisfactory_data.json` is the immutable source of truth for all items,
 buildings, recipes, and resource weights (see `docs/SOURCE_OF_TRUTH.md`).

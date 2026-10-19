@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-18 — Brand pack + real favicon
+
+- `Brand/`: the identity (mark, wordmark, lockups, avatars), `brand-system.html` and
+  `social-pack.html` as self-contained pages, and every PNG rendered from them at exact
+  platform sizes. The catalogue figure is measured from `sim.js` and the source JSON at
+  build time, so it can't drift from the game.
+- `favicon/` at the repo root replaces the inline ⚡ emoji icon, which rendered as a
+  different glyph on every OS. Linked with relative paths so it works from any base URL.
+- README leads with the hero and the catalogue figure.
+
 ## 2026-08-24 — Smart splitter rules
 
 - Every Splitter and Pipe Splitter output has a rule: **Any** (anything no sibling claimed),

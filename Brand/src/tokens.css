@@ -1,0 +1,115 @@
+/* Gridworks — design tokens. Neon on void, wires on a grid.
+ *
+ * These are lifted from the game's own src/style.css rather than invented
+ * alongside it, so the brand and the thing it is a brand for cannot drift.
+ * Where a value here differs from the game, it is because the game's value
+ * fails a contrast check — those are called out inline and on the brand page.
+ *
+ * Every ratio in a comment below is measured, not estimated: src/contrast.py
+ * computes it and brand-system.html recomputes all of them live in the
+ * browser, so a colour that gets nudged and quietly stops meeting AA shows up
+ * as a red cell rather than as a stale comment.
+ *
+ * Dark ratios are against --g-void (#0A0C12), light against --g-paper
+ * (#EEF3F8). "AA" means >= 4.5:1, the threshold for normal-size body text.
+ */
+:root {
+  /* ---- ground: the void the grid sits on -------------------------------- */
+  --g-void:     #0A0C12;   /* page field — the near-black everything sits on */
+  --g-surface:  #0E1420;   /* raised: palette items, inspector wells */
+  --g-panel:    #12202C;   /* buttons, chips, the HUD's own fills */
+  --g-sunk:     #152232;   /* recessed: progress tracks, code blocks */
+  --g-line:     #1D2733;   /*  1.29:1  hairlines. A border, never a text colour */
+  --g-line-2:   #23445C;   /*  1.91:1  emphasised border, focus ring track */
+
+  /* ---- ink -------------------------------------------------------------- */
+  --g-ink:      #CFD8E3;   /* 13.58:1  body text */
+  --g-ink-2:    #9FB0C3;   /*  8.82:1  secondary text, buffer readouts */
+  --g-ink-3:    #7A8AA0;   /*  5.56:1  smallest permitted text colour — AA */
+  --g-ink-4:    #5B6B80;   /*  3.59:1  LARGE ONLY (>=24px) or non-text.
+                                       The game uses this at 10px for section
+                                       labels; that is below AA and is the one
+                                       place the kit does not follow the app. */
+
+  /* ---- accents ---------------------------------------------------------- */
+  /* Cyan is the brand. On void it is not just a graphic colour — at 11.71:1 it
+     is a perfectly good text colour, which is the opposite of the usual neon
+     problem. The trap is the other direction: on white it measures 1.50:1 and
+     disappears. Use --g-cyan-ink whenever cyan has to sit on paper. */
+  --g-cyan:      #4DD8FF;  /* 11.71:1 on void · 1.50:1 on paper — the brand */
+  --g-cyan-lit:  #E8F6FF;  /* 17.74:1  the bright half of the wordmark */
+  --g-cyan-ink:  #0A6A88;  /*  5.48:1 on paper — cyan as text on light ground */
+  --g-cyan-deep: #1C6E8C;  /*  3.41:1 on void — wire shadow, inactive rails */
+  --g-cyan-glow: #4DD8FF44;/* the 8px bloom on hover states. Decoration only */
+
+  /* ---- signals: the three status lights --------------------------------- */
+  /* Straight out of the game: every node in a factory is one of these. */
+  --g-green:  #58D68D;     /* 10.63:1  running, shipped, satisfied */
+  --g-amber:  #F4D03F;     /* 12.98:1  starved, throttled, needs attention */
+  --g-coral:  #FF7675;     /*  7.54:1  stopped, unpowered, destructive */
+  --g-seed:   #7BED9F;     /* the seed chip — a quieter green, decorative */
+
+  /* light-ground counterparts, for the same three on a white page */
+  --g-green-ink: #116B3C;  /*  5.89:1 on paper */
+  --g-amber-ink: #7A5A00;  /*  5.72:1 on paper */
+  --g-coral-ink: #B32B2B;  /*  5.71:1 on paper */
+
+  /* ---- paper: the same system on a light ground -------------------------
+     Not a light mode for the game — a light mode for the brand, so the mark
+     survives a README, a slide and a store page. */
+  --g-paper:      #EEF3F8;
+  --g-paper-sunk: #DCE5EE;
+  --g-paper-line: #C3D0DD;
+  --g-paper-ink:  #101720;  /* 16.14:1 */
+  --g-paper-ink-2:#41505F;  /*  7.41:1 */
+
+  /* ---- type -------------------------------------------------------------
+     The wordmark ships as outlines drawn on the grid, so nothing here has to
+     match it. Running text is the same system stack the game uses — a browser
+     game that blocks first paint on a webfont fetch would be missing the
+     point, and the brand pack inherits that constraint on purpose. */
+  --g-sans: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto,
+            "Helvetica Neue", Arial, sans-serif;
+  --g-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, "SF Mono",
+            "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  /* Display is the wordmark's own construction: uppercase, wide-tracked, and
+     letterspaced far enough that the grid reads. Any geometric sans stands in. */
+  --g-display: "Eurostile", "Michroma", "Rajdhani", var(--g-sans);
+
+  /* Type scale — 1.25 (major third) off a 13px base, because 13px is what the
+     game's HUD actually runs at and the kit should not quietly redesign it. */
+  --g-t-xs:   11px;
+  --g-t-sm:   13px;   /* the app's base */
+  --g-t-base: 16px;
+  --g-t-md:   20px;
+  --g-t-lg:   25px;
+  --g-t-xl:   31px;
+  --g-t-2xl:  39px;
+  --g-t-3xl:  49px;
+
+  --g-lh-tight: 1.15;   /* display */
+  --g-lh-snug:  1.35;   /* headings, UI */
+  --g-lh-body:  1.45;   /* running text — the app's own line height */
+  --g-track-display: 0.06em;   /* the wordmark is tracked OPEN, not tight */
+  --g-track-label:   0.16em;   /* the 10px uppercase section labels */
+
+  /* ---- form ------------------------------------------------------------- */
+  /* Small radii. This is a machine UI: 4-6px reads engineered, anything
+     rounder reads consumer app and fights the orthogonal wires. */
+  --g-r-sm:  4px;
+  --g-r-md:  6px;
+  --g-r-lg:  10px;
+
+  --g-tile:  32px;                   /* THE grid module — src/sim.js TILE = 32.
+                                        Every spacing value here is a division
+                                        of it, so brand layout and world layout
+                                        are the same grid. */
+  --g-space: 8px;                    /* tile / 4 */
+  --g-glow-sm: 0 0 8px var(--g-cyan-glow);
+  --g-glow-md: 0 0 14px #4DD8FF33;
+
+  /* Clear space around the mark, as a multiple of its own height. Nothing —
+     type, edge of canvas, another logo — comes inside this. */
+  --g-mark-clearspace: 0.30;
+  --g-mark-min-px: 20px;             /* below this, use the simple mark */
+}
