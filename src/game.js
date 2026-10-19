@@ -56,7 +56,8 @@ const nodePx = (n) => {
 // 1x1 logistics and deposits keep the plain full-tile spread; they have no header text to dodge.
 const HEADER = 28;      // name baseline 14, status baseline 25
 const BAR_H = 12;       // progress bar sits at r.h - 12; ports stop 18 above the bottom
-function portPos(node, port) {
+function portPos(node, port) { return { ...portXY(node, port), side: port.side }; }
+function portXY(node, port) {
   const r = nodePx(node);
   const sibs = S.portsOf(node, ctx).filter((p) => p.side === port.side);
   const i = sibs.findIndex((p) => p.id === port.id);
@@ -134,8 +135,10 @@ function handleAt(wx, wy) {
   return null;
 }
 
+const NEXT_STYLE = { noodle: 'straight', straight: 'square', square: 'noodle' };
 function wirePath(p1, p2, w) {
   if (w?.style === 'straight') return [p1, ...w.pts, p2];
+  if (w?.style === 'square') return FX.squarePath(p1, p1.side ?? 'E', p2, p2.side ?? 'W', w.pts);
   // noodle: sample the cubic bezier
   const dx = Math.max(40, Math.abs(p2.x - p1.x) / 2);
   const c1 = { x: p1.x + dx, y: p1.y }, c2 = { x: p2.x - dx, y: p2.y };
@@ -389,7 +392,7 @@ function drawWire(w, now) {
     if (onScreen) FX.flow(cx, w, pts, (w.flow ?? 0) / cap, 1 + (w.mark ?? 0) * 0.4, now, color);
   }
   cx.shadowBlur = 0;
-  if (selected && w.style === 'straight') {
+  if (selected && w.style !== 'noodle') {
     for (let i = 0; i < w.pts.length; i++) {
       const p = w.pts[i];
       const s = 5 / cam.z + 2;
@@ -716,7 +719,7 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('dblclick', (e) => {
   const p = toWorld(e.offsetX, e.offsetY);
   const wire = wireAt(p.x, p.y);
-  if (!wire || wire.style !== 'straight') return;
+  if (!wire || wire.style === 'noodle') return;
   const ends = wireEnds(wire);
   if (!ends) return;
   const pts = [ends[0], ...wire.pts, ends[1]];
@@ -753,11 +756,11 @@ addEventListener('keydown', (e) => {
   if (e.key === 's' || e.key === 'S') {
     if (ui.sel?.type === 'wire') {
       const w = state.wires.find((q) => q.id === ui.sel.id);
-      if (w) { w.style = w.style === 'straight' ? 'noodle' : 'straight'; select({ type: 'wire', id: w.id }); }
+      if (w) { w.style = NEXT_STYLE[w.style] ?? 'noodle'; select({ type: 'wire', id: w.id }); }
     } else {
-      settings.wireStyle = settings.wireStyle === 'straight' ? 'noodle' : 'straight';
+      settings.wireStyle = NEXT_STYLE[settings.wireStyle] ?? 'noodle';
       saveSettings();
-      ui.hint = `new wires: ${settings.wireStyle} · S to toggle`;
+      ui.hint = `new wires: ${settings.wireStyle} · S to cycle`;
     }
   }
 });
@@ -1116,8 +1119,8 @@ const HELP = [
   ['Delete', 'select, then Del'],
   ['Pause', 'Space, or the ⏸ button'],
   ['Speed', 'the 1x button cycles 1x / 2x / 4x'],
-  ['Wire style', 'S toggles straight/noodle — per-wire when a wire is selected, else for new wires'],
-  ['Tidy a wire', 'straight wires bend: double-click to add a corner, drag it, Del removes it'],
+  ['Wire style', 'S cycles noodle / straight / square — per-wire when a wire is selected, else for new wires'],
+  ['Tidy a wire', 'straight and square wires bend: double-click to add a corner, drag it, Del removes it'],
   ['Long runs', 'mid-wire, click empty ground to drop a pole and keep going'],
   ['Recipes', 'select a machine, then the Recipe dropdown'],
   ['Splitter rules', 'select a splitter — each output can be Any, Overflow, or one item'],

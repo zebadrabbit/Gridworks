@@ -2,6 +2,42 @@
 // sim state. Pure helpers take numbers/arrays so they run in Node without a DOM.
 import { settings } from './settings.js';
 
+// ------------------------------------------------------------------ square wire routing
+// A square wire leaves its port straight for STUB px, then only ever turns 90°; same on the way
+// in. Sides are the port's tile edge ('E' out, 'W' in, 'N' power). Waypoints are forced corners.
+const STUB = 16;
+const NORMAL = { E: [1, 0], W: [-1, 0], N: [0, -1] };
+export function squarePath(p1, s1, p2, s2, wps = []) {
+  const [nx1, ny1] = NORMAL[s1] ?? NORMAL.E, [nx2, ny2] = NORMAL[s2] ?? NORMAL.W;
+  const a = { x: p1.x + nx1 * STUB, y: p1.y + ny1 * STUB };
+  const b = { x: p2.x + nx2 * STUB, y: p2.y + ny2 * STUB };
+  const pts = [p1, a];
+  if (s1 === 'N' && s2 === 'N') {                  // power: inverted U over the higher port
+    const top = Math.min(a.y, b.y);
+    pts.push({ x: a.x, y: top }, { x: b.x, y: top });
+  } else if (wps.length) {                         // every leg horizontal first, then vertical,
+    let cur = a;                                   // so each corner is arrived at vertically
+    for (const w of [...wps, b]) { pts.push({ x: w.x, y: cur.y }, w); cur = w; }
+    pts.pop();
+  } else if ((b.x - a.x) * nx1 >= 0) {             // target ahead: Z, vertical run at mid x
+    const mx = (a.x + b.x) / 2;
+    pts.push({ x: mx, y: a.y }, { x: mx, y: b.y });
+  } else {                                         // target behind: go round at mid y
+    let my = (a.y + b.y) / 2;
+    if (Math.abs(a.y - b.y) < 40) my = Math.min(a.y, b.y) - 40;
+    pts.push({ x: a.x, y: my }, { x: b.x, y: my });
+  }
+  pts.push(b, p2);
+  const out = [pts[0]];                            // drop zero-length legs, merge collinear ones
+  for (const q of pts.slice(1)) {
+    const l = out[out.length - 1], k = out[out.length - 2];
+    if (q.x === l.x && q.y === l.y) continue;
+    if (k && ((k.x === l.x && l.x === q.x) || (k.y === l.y && l.y === q.y))) out[out.length - 1] = q;
+    else out.push(q);
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------ flow capsules
 // Spacing between shapes: 40px at a trickle, 10px at (or above) belt capacity.
 export const spacingFor = (ratio) => 40 - 30 * Math.min(1, Math.max(0, ratio));

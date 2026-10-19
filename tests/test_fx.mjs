@@ -65,4 +65,32 @@ assert.ok(Math.abs(FX.nightDepth(300) - 1) < 1e-9);
 assert.ok(Math.abs(FX.nightDepth(599.999) - FX.nightDepth(0)) < 1e-3, 'continuous across cycle boundary');
 assert.ok(FX.nightDepth(150) > 0.4 && FX.nightDepth(150) < 0.6);
 
+// --- square wire routing: straight stub out of the port, 90° bends only, no zero-length legs
+const sq = (a, sa, b, sb, wps = []) => FX.squarePath(a, sa, b, sb, wps);
+const ortho = (pts) => pts.every((q, i) => i === 0 || q.x === pts[i - 1].x || q.y === pts[i - 1].y);
+const noDup = (pts) => pts.every((q, i) => i === 0 || q.x !== pts[i - 1].x || q.y !== pts[i - 1].y);
+let r = sq({ x: 72, y: 86 }, 'E', { x: 228, y: 86 }, 'W');
+assert.ok(ortho(r) && noDup(r), 'lined up: orthogonal, no dup points');
+assert.equal(r.length, 2, 'lined up: one straight leg');
+r = sq({ x: 72, y: 50 }, 'E', { x: 228, y: 120 }, 'W');
+assert.ok(ortho(r) && noDup(r));
+assert.ok(r[1].y === 50 && r[1].x >= 72 + 16, 'leaves E port straight for at least the stub');
+assert.ok(r[r.length - 2].y === 120 && r[r.length - 2].x <= 228 - 16, 'enters W port straight for at least the stub');
+assert.equal(r.length, 4, 'offset ahead: Z with two bends');
+assert.equal(r[1].x, r[2].x, 'Z vertical run');
+r = sq({ x: 224, y: 50 }, 'E', { x: 40, y: 130 }, 'W');
+assert.ok(ortho(r) && noDup(r));
+assert.equal(r.length, 6, 'target behind: four bends');
+assert.ok(r[1].x === 240 && r[r.length - 2].x === 24, 'goes round outside both stubs');
+r = sq({ x: 72, y: 70 }, 'N', { x: 232, y: 100 }, 'N');
+assert.ok(ortho(r) && noDup(r));
+assert.equal(r.length, 4, 'power top-to-top: inverted U, two bends');
+assert.ok(r.every((q) => q.y <= 100) && r[1].y === 54 && r[2].y === 54, 'U runs above the higher port');
+r = sq({ x: 72, y: 50 }, 'E', { x: 228, y: 120 }, 'W', [{ x: 150, y: 140 }]);
+assert.ok(ortho(r) && noDup(r));
+assert.ok(r.some((q) => q.x === 150 && q.y === 140), 'waypoint is on the path');
+const i = r.findIndex((q) => q.x === 150 && q.y === 140);
+assert.ok(r[i - 1].x === 150 && r[i + 1].y === 140, 'waypoint is a corner: arrive vertical, leave horizontal');
+assert.ok(!r.some((q, k) => k > 0 && k < r.length - 1 && r[k - 1].y > q.y && r[k + 1].y > q.y && r[k - 1].x === q.x && r[k + 1].x === q.x), 'never doubles back');
+
 console.log('all fx checks passed');

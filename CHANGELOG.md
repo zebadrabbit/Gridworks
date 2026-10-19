@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-18 — Square wire style
+
+- Third wire style, **square**: the wire leaves its port straight for half a tile, then only
+  ever turns 90°. Target ahead gets a Z with the vertical run halfway; target behind goes round
+  the outside; power wires arch over the higher pole. Double-click adds a corner, as on straight
+  wires, and every corner is honoured. `S` now cycles noodle → straight → square; the settings
+  radio gains Square. Saves store `style: 'square'`; old saves unchanged.
+
 ## 2026-10-18 — Brand pack + real favicon
 
 - `Brand/`: the identity (mark, wordmark, lockups, avatars), `brand-system.html` and
