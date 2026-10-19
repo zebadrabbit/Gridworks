@@ -412,7 +412,17 @@ export function portsOf(node, ctx) {
                  accepts: ELEVATOR_ITEMS });
   } else if (def.type === 'logistic') {
     for (let i = 0; i < def.nIn; i++) inP('in' + i, def.lkind, null, i);
-    for (let i = 0; i < def.nOut; i++) outP('out' + i, def.lkind, null, i);
+    // Per-output rules (spec: smart splitter). `any` = anything no sibling claimed by item.
+    const filters = def.nOut > 1 ? (node.filters ?? []) : [];
+    const claimed = filters.filter((f) => f?.mode === 'item').map((f) => f.res);
+    for (let i = 0; i < def.nOut; i++) {
+      const f = filters[i] ?? { mode: 'any' };
+      if (f.mode === 'item') ports.push({ id: 'out' + i, dir: 'out', kind: def.lkind, res: f.res, side: 'E', idx: i, mode: 'item' });
+      // An overflow port gets no `excludes`: it carries whatever the non-overflow outputs left,
+      // claimed or not — a blocked item output is exactly what overflow exists for.
+      else ports.push({ id: 'out' + i, dir: 'out', kind: def.lkind, res: null, side: 'E', idx: i, mode: f.mode,
+                        excludes: f.mode === 'any' && def.nOut > 1 ? claimed : undefined });
+    }
   }
   if (def.draw > 0) ports.push({ id: 'pin', dir: 'in', kind: 'power', res: null, side: 'N', idx: 0 });
   if (def.powerOut > 0) ports.push({ id: 'pout', dir: 'out', kind: 'power', res: null, side: 'N', idx: 1 });
@@ -432,6 +442,7 @@ export function canConnect(aNode, aPort, bNode, bPort, state, ctx) {
     if (pa.dir === pb.dir) return false;
     const [src, dst] = pa.dir === 'out' ? [pa, pb] : [pb, pa];
     if (src.res && dst.res && src.res !== dst.res) return false;
+    if (src.excludes && dst.res && src.excludes.includes(dst.res)) return false;
   }
   {
     const [sp, dp] = pa.dir === 'out' ? [pa, pb] : [pb, pa];
@@ -518,7 +529,11 @@ export function setRecipe(state, node, recipeKey, ctx) {
   node.recipe = recipeKey;
   node.progress = 0;
   node.buf = {};
-  // drop wires whose port no longer exists or no longer matches
+  reconcileWires(state, node, ctx);
+}
+
+// drop wires on `node` whose port no longer exists or no longer matches the far end
+export function reconcileWires(state, node, ctx) {
   state.wires = state.wires.filter((w) => {
     for (const end of [w.a, w.b]) {
       if (end.n !== node.id) continue;
@@ -530,12 +545,23 @@ export function setRecipe(state, node, recipeKey, ctx) {
     return true;
   });
 }
+
+// Splitter output rule. filter: { mode: 'any' } | { mode: 'item', res } | { mode: 'overflow' }.
+// Never touches buf — a stuck item is the player's to see in the inspector.
+export function setFilter(state, node, i, filter, ctx) {
+  node.filters ??= [];
+  node.filters[i] = filter;
+  reconcileWires(state, node, ctx);
+}
+
 function canConnectExisting(aNode, aPort, bNode, bPort, ctx) {
   const pa = getPort(aNode, aPort, ctx), pb = getPort(bNode, bPort, ctx);
   if (!pa || !pb || pa.kind !== pb.kind) return false;
   if (pa.kind !== 'power' && pa.res && pb.res && pa.res !== pb.res) return false;
   if (pa.accepts && pb.res && !pa.accepts.includes(pb.res)) return false;
   if (pb.accepts && pa.res && !pb.accepts.includes(pa.res)) return false;
+  const [sp, dp] = pa.dir === 'out' ? [pa, pb] : [pb, pa];
+  if (sp.excludes && dp.res && sp.excludes.includes(dp.res)) return false;
   return true;
 }
 
@@ -562,6 +588,15 @@ export function normalizeSave(raw, ctx) {
   // _fog is legacy: the fog-of-war cache it belonged to is gone, but saves written while fog
   // existed still carry it on every node, and nothing else strips it. Drop it on load.
   for (const n of s.nodes) { delete n._net; delete n._fog; }
+  for (const n of s.nodes) {
+    const def = ctx.catalog[n.key];
+    if (def.type !== 'logistic' || !(def.nOut > 1)) { delete n.filters; continue; }
+    if (!Array.isArray(n.filters)) { delete n.filters; continue; }
+    n.filters = n.filters.slice(0, def.nOut).map((f) =>
+      f?.mode === 'overflow' ? { mode: 'overflow' }
+      : f?.mode === 'item' && ctx.names[f.res] && kindOf(f.res, ctx) === def.lkind ? { mode: 'item', res: f.res }
+      : { mode: 'any' });
+  }
   if (!s.nodes.some((n) => n.key === 'the-hub')) return null;
   return s;
 }
@@ -764,36 +799,96 @@ export function tick(state, dt, ctx) {
   const byId = Object.fromEntries(state.nodes.map((n) => [n.id, n]));
   const outWires = {};
   for (const w of state.wires) if (w.kind === 'item' || w.kind === 'fluid') (outWires[w.a.n] ??= []).push(w);
-  // snapshot logistic-node buffers so fair-share is computed against the pre-tick total,
-  // not a live buffer that shrinks as earlier sibling wires in this same tick drain it
-  const logisticBuf = {};
-  for (const n of state.nodes) if (ctx.catalog[n.key].type === 'logistic') logisticBuf[n.id] = { ...n.buf };
-  for (const wire of state.wires) {
+  // ponytail: per-tick memo — srcPortOf/isOverflow/carries would otherwise re-run getPort ->
+  // portsOf per wire per lookup (~1700x/tick on 200 wires); cache the source port per wire
+  // object for the duration of this tick.
+  const portMemo = new Map();
+  const srcPortOf = (w) => {
+    if (!portMemo.has(w)) { const s = byId[w.a.n]; portMemo.set(w, s ? getPort(s, w.a.p, ctx) : null); }
+    return portMemo.get(w);
+  };
+  // Overflow outputs run after every other wire so they see only what nobody else could take.
+  // ponytail: two passes over a sorted list, not an evaluation graph.
+  const isOverflow = (w) => srcPortOf(w)?.mode === 'overflow';
+  // ponytail: with no overflow rule anywhere the two passes are the same list — skip the copy.
+  const ordered = state.wires.some(isOverflow)
+    ? [...state.wires.filter((w) => !isOverflow(w)), ...state.wires.filter(isOverflow)]
+    : state.wires;
+  // Every logistic node's buffer is snapshotted once, eagerly, before either pass runs — the
+  // pre-rewrite timing, so a plain (non-overflow) splitter gets back its exact old behaviour.
+  // Pass 0 (primary) shares from `pre[node][res]` directly; pass 1 (overflow) shares whatever
+  // pass 0 didn't actually withdraw (`pre - taken`), not a live re-read of the buffer — so
+  // overflow can no longer out-race the primary for supply that lands mid-tick, regardless of
+  // wire array order or whether the node's own feed is itself an overflow-sourced wire. This
+  // costs one tick of latency per hop on both passes, matching the pre-Task-2 belt behaviour.
+  const pre = {};
+  for (const n of state.nodes) if (ctx.catalog[n.key].type === 'logistic') pre[n.id] = { ...n.buf };
+  const taken = {}; // node id -> res -> amount pass 0 withdrew, for pass 1's leftover math
+  // can this out-wire carry `res`? (fixed res, or an any/overflow port that hasn't excluded it)
+  const carries = (w, res) => {
+    const p = srcPortOf(w);
+    if (!p) return false;
+    if (p.res) return p.res === res;
+    return !(p.excludes?.includes(res));
+  };
+  // room for `res` on a wire's destination — same rule as `space` below, used to drop
+  // space-blocked siblings out of the pass-0 share so their slice goes to an open sibling
+  // instead of falling through to overflow.
+  const spaceOn = (w, res) => {
+    const d = byId[w.b.n]; if (!d) return 0;
+    const dd = ctx.catalog[d.key];
+    return dd.type === 'hub' || dd.type === 'elevator' ? Infinity
+      : dd.type === 'store' ? dd.cap - bufTotal(d.buf) : BUF_CAP - (d.buf[res] ?? 0);
+  };
+  for (const wire of ordered) {
     wire.flow = 0;
     if (wire.kind === 'power') continue;
     const src = byId[wire.a.n], dst = byId[wire.b.n];
     if (!src || !dst) continue;
-    const srcPort = getPort(src, wire.a.p, ctx);
+    const srcPort = srcPortOf(wire);
     const dstPort = getPort(dst, wire.b.p, ctx);
     if (!srcPort || !dstPort) continue;
+    const pass = srcPort.mode === 'overflow' ? 1 : 0;
     const res = srcPort.res ?? dstPort.res ??
       Object.keys(src.buf)
         .filter((k) => src.buf[k] > 1e-9 && kindOf(k, ctx) === wire.kind &&
+          !(srcPort.excludes?.includes(k)) &&
           (!dstPort.accepts || dstPort.accepts.includes(k)))
         .reduce((best, k) => (best == null || src.buf[k] > src.buf[best] ? k : best), null);
     if (!res || (dstPort.res && dstPort.res !== res)) continue;
+    if (srcPort.excludes?.includes(res)) continue;
     if (dstPort.accepts && !dstPort.accepts.includes(res)) continue;
     const rate = (wire.kind === 'fluid' ? ctx.pipes[wire.mark ?? 0].rate : ctx.belts[wire.mark ?? 0].rate) / 60;
     const dstDef = ctx.catalog[dst.key];
     const space = dstDef.type === 'hub' || dstDef.type === 'elevator' ? Infinity
       : dstDef.type === 'store' ? dstDef.cap - bufTotal(dst.buf)
       : BUF_CAP - (dst.buf[res] ?? 0);
-    // ponytail: proportional split each tick, not whole-unit round-robin — same steady-state rates
-    const share = ctx.catalog[src.key].type === 'logistic'
-      ? (logisticBuf[src.id]?.[res] ?? 0) / (outWires[src.id]?.length ?? 1) : (src.buf[res] ?? 0);
-    const amt = Math.min(rate * dt, share, Math.max(0, space));
+    // ponytail: proportional split each tick, not whole-unit round-robin — same steady-state rates.
+    // A logistic source shares among the sibling outputs that can actually carry `res`, in the
+    // same pass (overflow siblings split what pass 0 actually left behind).
+    let share;
+    if (ctx.catalog[src.key].type === 'logistic') {
+      const outs = outWires[src.id] ?? [];
+      // ponytail: a splitter with no item/overflow rule can never exclude a sibling, so skip
+      // the filter entirely — the plain path stays exactly what it was before rules existed.
+      let sibs = outs;
+      if (src.filters?.some((f) => f?.mode === 'item' || f?.mode === 'overflow')) {
+        // A blocked primary must not shrink its siblings' share when an overflow port is
+        // waiting: its unused slice would land in `pre - taken` and leak to overflow.
+        const hasOverflow = outs.some(isOverflow);
+        sibs = outs.filter((w) => isOverflow(w) === (pass === 1) && carries(w, res)
+          && !(pass === 0 && hasOverflow && spaceOn(w, res) <= 1e-9));
+      }
+      const avail = pre[src.id]?.[res] ?? 0;
+      const pool = pass === 1 ? avail - (taken[src.id]?.[res] ?? 0) : avail;
+      share = Math.max(0, pool) / Math.max(1, sibs.length);
+    } else share = src.buf[res] ?? 0;
+    const amt = Math.min(rate * dt, share, Math.max(0, space), src.buf[res] ?? 0);
     if (amt <= 1e-9) continue;
     src.buf[res] -= amt;
+    if (pass === 0 && ctx.catalog[src.key].type === 'logistic') {
+      (taken[src.id] ??= {})[res] = (taken[src.id][res] ?? 0) + amt;
+    }
     if (dstDef.type === 'hub') {
       state.shipped[res] = (state.shipped[res] ?? 0) + amt;
       state.msProgress[res] = (state.msProgress[res] ?? 0) + amt;

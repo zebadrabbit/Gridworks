@@ -45,9 +45,11 @@ Mergers are untouched. Nothing in this spec applies to a 1-out logistic node (po
   an `item:copper` port from wiring into an iron smelter, and the transfer loop's existing
   `srcPort.res` precedence carries it.
 - `mode`: `'any' | 'item' | 'overflow'`.
-- `excludes` (mode `any` and `overflow` only): the set of resources claimed by sibling Item
+- `excludes` (mode `any` only): the set of resources claimed by sibling Item
   ports. The transfer loop's resource picker skips these, and a wire whose destination port has
-  a fixed `res` in `excludes` moves nothing.
+  a fixed `res` in `excludes` moves nothing. An overflow port has no `excludes`: it carries
+  whatever the non-overflow outputs left, claimed or not — an item whose Item output is blocked
+  is exactly what overflow exists for.
 
 ### Transfer loop
 
@@ -61,8 +63,11 @@ Two changes, both inside the existing per-wire loop:
    That becomes `logisticBuf[res] / (number of sibling out-wires eligible for res)`, where
    eligible means the port's `res` equals `res` or (mode `any`) `res` is not in `excludes`. So a
    two-way split with one Item output doesn't waste a third of the flow on an output that will
-   never take it. Overflow wires share the **remaining** buffer (re-read after pass 1) among the
-   overflow siblings.
+   never take it. When the node has an overflow output, a non-overflow sibling whose destination
+   has no room this tick is dropped from that count, so an open sibling takes its share before
+   anything overflows. Overflow wires share what is left of the pre-tick snapshot after the
+   non-overflow outputs took their share (`snapshot − taken`, never a live re-read, so the result
+   does not depend on wire order) among the overflow siblings.
 
 `kindOf` and `dstPort.accepts` checks are unchanged. Belt rate caps are unchanged.
 

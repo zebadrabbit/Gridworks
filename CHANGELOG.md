@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-24 — Smart splitter rules
+
+- Every Splitter and Pipe Splitter output has a rule: **Any** (anything no sibling claimed),
+  **Overflow** (only what the other outputs can't take; several overflows share evenly), or one
+  **item**. Set from the inspector; port tooltips show the rule. No new building, no unlock.
+- Splitters share a resource only among the outputs that can carry it, so a two-way sort doesn't
+  waste a third of the flow on a port that would never take it.
+- `node.filters` saves with the node; old saves behave exactly as before.
+
 ## 2026-08-24 — Live inspector status + working bars
 
 - Inspector status line refreshes live; it used to freeze at selection time (a burner selected
