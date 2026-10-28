@@ -583,15 +583,22 @@ export function normalizeSave(raw, ctx) {
   s.msProgress ??= {};
   s.unlocked ??= { milestone: 0, buildings: [...START_UNLOCKED] };
   s.unlocked.buildings = s.unlocked.buildings.filter((k) => ctx.catalog[k]);
-  s.beltMark ??= 0;
-  s.pipeMark ??= 0;
+  // Clamp marks to the tables the catalog actually has: a hand-edited or newer save with a mark
+  // past the end would throw in tick (`ctx.belts[mark].rate`) and brick the game on load.
+  const clampMark = (m, table) => Math.min(Math.max(Number.isInteger(m) ? m : 0, 0), table.length - 1);
+  s.beltMark = clampMark(s.beltMark, ctx.belts);
+  s.pipeMark = clampMark(s.pipeMark, ctx.pipes);
   s.shipped ??= {};
   s.elevator ??= { phase: 0, progress: {} };
   delete s.explored; // fog is gone; drop the array old saves still carry
   s.nodes = s.nodes.filter((n) => ctx.catalog[n.key]);
   const ids = new Set(s.nodes.map((n) => n.id));
   s.wires = s.wires.filter((w) => ids.has(w.a.n) && ids.has(w.b.n));
-  for (const w of s.wires) { w.style ??= 'noodle'; w.pts ??= []; }
+  for (const w of s.wires) {
+    w.style ??= 'noodle'; w.pts ??= [];
+    if (w.kind === 'item') w.mark = clampMark(w.mark, ctx.belts);
+    if (w.kind === 'fluid') w.mark = clampMark(w.mark, ctx.pipes);
+  }
   // _fog is legacy: the fog-of-war cache it belonged to is gone, but saves written while fog
   // existed still carry it on every node, and nothing else strips it. Drop it on load.
   for (const n of s.nodes) { delete n._net; delete n._fog; }

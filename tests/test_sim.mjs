@@ -340,6 +340,15 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
   assert.equal(norm.beltMark, 0);
   assert.deepEqual(norm.msProgress, {});
   assert.ok(norm.unlocked.buildings.includes('miner-mk1'), 'default unlocks filled');
+  // marks past the catalog tables (hand-edited or newer save) clamp instead of throwing in tick
+  const rawM = JSON.parse(JSON.stringify(s12));
+  rawM.beltMark = 99; rawM.pipeMark = -1;
+  rawM.wires.push({ id: 10002, a: { n: rawM.nodes[0].id, p: 'out0' }, b: { n: hub12.id, p: 'in0' }, kind: 'item', mark: 99 });
+  const normM = normalizeSave(rawM, ctx);
+  assert.equal(normM.beltMark, ctx.belts.length - 1, 'beltMark clamped to top mark');
+  assert.equal(normM.pipeMark, 0, 'negative pipeMark clamped to 0');
+  assert.equal(normM.wires.find((w) => w.id === 10002).mark, ctx.belts.length - 1, 'wire mark clamped');
+  assert.doesNotThrow(() => tick(normM, 0.1, ctx), 'clamped save ticks');
   assert.equal(normalizeSave(null, ctx), null, 'null save rejected');
   assert.equal(normalizeSave({}, ctx), null, 'shapeless save rejected');
   assert.equal(normalizeSave({ nodes: [], wires: [] }, ctx), null, 'hubless save rejected');
