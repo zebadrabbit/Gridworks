@@ -479,6 +479,13 @@ export function addWire(state, aNode, aPort, bNode, bPort, ctx) {
   return wire;
 }
 
+// Units per second a belt/pipe wire can carry at its mark. Shared by tick (what actually
+// moves) and the renderer (flow-shape density = flow / capacity) so the two never disagree.
+export function wireCapacity(wire, ctx) {
+  const table = wire.kind === 'fluid' ? ctx.pipes : ctx.belts;
+  return table[wire.mark ?? 0].rate / 60;
+}
+
 export function removeWire(state, id) {
   const w = state.wires.find((q) => q.id === id);
   if (!w) return;
@@ -858,7 +865,7 @@ export function tick(state, dt, ctx) {
     if (!res || (dstPort.res && dstPort.res !== res)) continue;
     if (srcPort.excludes?.includes(res)) continue;
     if (dstPort.accepts && !dstPort.accepts.includes(res)) continue;
-    const rate = (wire.kind === 'fluid' ? ctx.pipes[wire.mark ?? 0].rate : ctx.belts[wire.mark ?? 0].rate) / 60;
+    const rate = wireCapacity(wire, ctx);
     const dstDef = ctx.catalog[dst.key];
     const space = dstDef.type === 'hub' || dstDef.type === 'elevator' ? Infinity
       : dstDef.type === 'store' ? dstDef.cap - bufTotal(dst.buf)

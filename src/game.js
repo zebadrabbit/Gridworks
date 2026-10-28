@@ -382,7 +382,7 @@ function drawWire(w, now) {
     cx.strokeStyle = color + '44';
     strokePts(pts);
     cx.shadowBlur = 0;
-    const cap = (w.kind === 'fluid' ? ctx.pipes[w.mark ?? 0].rate : ctx.belts[w.mark ?? 0].rate) / 60;
+    const cap = S.wireCapacity(w, ctx);
     // ponytail: bbox cull, no spatial index
     const M = 10;
     const vtl = toWorld(0, 0), vbr = toWorld(canvas.width, canvas.height);

@@ -1,7 +1,7 @@
 // node test_sim.mjs — smallest checks that fail if the sim logic breaks
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, setFilter, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H, ACHIEVEMENTS, earned, TUTORIAL, tutorialStep, HIST_LEN } from '../src/sim.js';
+import { buildCtx, newGame, addNode, addWire, removeWire, removeNode, addDeposit, setRecipe, setFilter, tick, canConnect, portsOf, MILESTONES, isUnlocked, normalizeSave, START_UNLOCKED, simulateOffline, OFFLINE_CAP, ELEVATOR_PHASES, ELEVATOR_ITEMS, lightOf, THROTTLE_LIGHT, genMap, distT, tierOf, tierFactor, HUB_X, HUB_Y, START_RADIUS, MAX_DIST, START_BUNDLE, WORLD_W, WORLD_H, ACHIEVEMENTS, earned, TUTORIAL, tutorialStep, HIST_LEN, wireCapacity } from '../src/sim.js';
 
 const data = JSON.parse(readFileSync(new URL('../data/source/satisfactory_data.json', import.meta.url)));
 const ctx = buildCtx(data);
@@ -1515,5 +1515,11 @@ assert.deepEqual(rt.wires[0].pts, [{ x: 100, y: 200 }], 'pts survive save round-
       `tank2 empty — nothing unclaimed: ${JSON.stringify(tanks[2].buf)}`);
   }
 }
+
+// wireCapacity: the one place belt/pipe throughput-per-second comes from (tick and the renderer share it)
+assert.equal(wireCapacity({ kind: 'item', mark: 0 }, ctx), ctx.belts[0].rate / 60, 'belt mk1 capacity');
+assert.equal(wireCapacity({ kind: 'item' }, ctx), ctx.belts[0].rate / 60, 'missing mark reads as mk1');
+assert.equal(wireCapacity({ kind: 'fluid', mark: ctx.pipes.length - 1 }, ctx), ctx.pipes.at(-1).rate / 60, 'top pipe mark');
+assert.ok(wireCapacity({ kind: 'item', mark: 1 }, ctx) > wireCapacity({ kind: 'item', mark: 0 }, ctx), 'higher mark carries more');
 
 console.log('all sim checks passed');
