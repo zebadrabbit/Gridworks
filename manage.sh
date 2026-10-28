@@ -44,7 +44,7 @@ case "${1:-}" in
     tail -n "${2:-50}" "$LOG_FILE"
     ;;
   test)
-    node tests/test_sim.mjs
+    node tests/test_sim.mjs && node tests/test_fx.mjs
     ;;
   *)
     echo "usage: $0 {start|stop|restart|status|logs [n]|test}   (PORT=$PORT, override with PORT=nnnn)"

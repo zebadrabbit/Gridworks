@@ -67,7 +67,7 @@ autosaves to localStorage; "New Map" regenerates the world.
 ## Test
 
 ```bash
-./manage.sh test         # runs node tests/test_sim.mjs
+./manage.sh test         # runs node tests/test_sim.mjs and tests/test_fx.mjs
 ```
 
 Tests also run in CI (GitHub Actions) on every push and pull request.
