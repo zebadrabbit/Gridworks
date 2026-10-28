@@ -93,4 +93,67 @@ const i = r.findIndex((q) => q.x === 150 && q.y === 140);
 assert.ok(r[i - 1].x === 150 && r[i + 1].y === 140, 'waypoint is a corner: arrive vertical, leave horizontal');
 assert.ok(!r.some((q, k) => k > 0 && k < r.length - 1 && r[k - 1].y > q.y && r[k + 1].y > q.y && r[k - 1].x === q.x && r[k + 1].x === q.x), 'never doubles back');
 
+// --- draw paths under a recording canvas stub: no DOM, just "did it throw / what did it emit"
+// Every method call pushes its name; property writes land on the target; gradients are the
+// stub itself so addColorStop records too.
+const calls = [];
+const cx = new Proxy({}, {
+  get: (t, k) => (k in t ? t[k] : (...a) => { calls.push(k); return cx; }),
+});
+const count = (name) => calls.filter((c) => c === name).length;
+
+// flow: belt strokes one capsule per spacing, fluid fills dots; nothing at zero ratio or too short
+calls.length = 0;
+FX.flow(cx, { kind: 'belt' }, path, 1, 1, 0, '#fff');
+assert.equal(count('stroke'), 1, 'belt flow strokes once');
+assert.equal(count('lineTo'), 7, 'belt flow: one capsule per spacing at saturation');
+calls.length = 0;
+FX.flow(cx, { kind: 'fluid' }, path, 1, 1, 0, '#fff');
+assert.equal(count('fill'), 1, 'fluid flow fills once');
+assert.equal(count('arc'), 7, 'fluid flow: one dot per spacing');
+calls.length = 0;
+FX.flow(cx, { kind: 'belt' }, path, 0, 1, 0, '#fff');
+FX.flow(cx, { kind: 'belt' }, [], 1, 1, 0, '#fff');
+FX.flow(cx, { kind: 'belt' }, [{ x: 0, y: 0 }, { x: 5, y: 0 }], 1, 1, 0, '#fff');
+assert.equal(calls.length, 0, 'flow: nothing for zero ratio, empty path, or path shorter than one spacing');
+
+// pulses: one ring while young, gone after PULSE_MS
+calls.length = 0;
+FX.pulse({ x: 10, y: 10, w: 32, h: 32 }, '#f00', 0);
+FX.drawPulses(cx, 100);
+assert.equal(count('roundRect'), 1, 'young pulse draws a ring');
+assert.equal(count('stroke'), 1);
+calls.length = 0;
+FX.drawPulses(cx, 600);
+FX.drawPulses(cx, 100);
+assert.equal(count('stroke'), 0, 'expired pulse is dropped and never redrawn');
+assert.equal(cx.globalAlpha, 1, 'alpha restored');
+
+// particles: a burst draws one rect per particle while alive, nothing once expired
+calls.length = 0;
+FX.burst(50, 50, 0);
+FX.drawParticles(cx, 100);
+assert.ok(count('fillRect') >= 12 && count('fillRect') <= 20, 'burst spawns 12..20 particles');
+calls.length = 0;
+FX.drawParticles(cx, 2000);
+assert.equal(count('fillRect'), 0, 'expired particles are dropped');
+assert.equal(cx.globalAlpha, 1, 'alpha restored');
+
+// ambient: manta, shimmer, nightTint
+calls.length = 0;
+FX.manta(cx, 0, 2000, 1000);
+assert.equal(count('createRadialGradient'), 1);
+assert.equal(count('fillRect'), 1, 'manta fills its blob');
+assert.equal(count('save'), count('restore'), 'manta balances save/restore');
+calls.length = 0;
+FX.shimmer(cx, 0, 0, 64, 64, 1000);
+assert.equal(count('createLinearGradient'), 1);
+assert.equal(count('roundRect'), 1); assert.equal(count('fill'), 1, 'shimmer fills the band');
+calls.length = 0;
+FX.nightTint(cx, 100, 100, 0);
+assert.equal(calls.length, 0, 'no tint at noon');
+FX.nightTint(cx, 100, 100, 1);
+assert.equal(count('fillRect'), 1, 'tint fills the screen at night');
+assert.equal(cx.fillStyle, 'rgba(4,6,20,0.25)', 'full-depth tint is 25% alpha');
+
 console.log('all fx checks passed');
