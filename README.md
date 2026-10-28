@@ -34,11 +34,17 @@ manage.sh           dev server control: start|stop|restart|status|logs|test
 src/
   sim.js            pure game logic (no DOM): catalog, mapgen, ports, tick
   game.js           canvas rendering + input
+  fx.js             effects layer: flow capsules, pulses, bursts, day/night, square wire paths
+  settings.js       display preferences (one localStorage key, never part of the save)
+  icons.js          inline SVG icons + meters
   style.css         Upload-Labs-style dark theme
 tests/
   test_sim.mjs      assert-based sim self-check
+  test_fx.mjs       fx helpers + settings migration
 data/source/        source-of-truth JSON (immutable)
 docs/               design specs, data policies
+Brand/              brand pack (SVG sources, rendered social/GitHub PNGs, generator scripts)
+favicon/            favicon ladder + web manifest
 ```
 
 ## Prerequisites
