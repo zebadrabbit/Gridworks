@@ -46,8 +46,16 @@ case "${1:-}" in
   test)
     node tests/test_sim.mjs && node tests/test_fx.mjs
     ;;
+  deploy)
+    # No build step: the site is the repo root. Ship it as-is, minus dev-only files.
+    rsync -avz --delete \
+      --exclude .git --exclude .github --exclude .claude --exclude .superpowers --exclude .venv \
+      --exclude Brand --exclude docs --exclude tests \
+      --exclude manage.sh --exclude CHANGELOG.md --exclude .gitignore --exclude '.server.*' \
+      ./ "${DEPLOY_TARGET:-dogzrbar@firetailfab.com:/home/dogzrbar/public_html/firetailfab/gridworks/}"
+    ;;
   *)
-    echo "usage: $0 {start|stop|restart|status|logs [n]|test}   (PORT=$PORT, override with PORT=nnnn)"
+    echo "usage: $0 {start|stop|restart|status|logs [n]|test|deploy}   (PORT=$PORT, override with PORT=nnnn)"
     exit 1
     ;;
 esac
