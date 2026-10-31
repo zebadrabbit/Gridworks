@@ -48,9 +48,12 @@ case "${1:-}" in
     ;;
   deploy)
     # No build step: the site is the repo root. Ship it as-is, minus dev-only files.
-    rsync -avz --delete \
+    # --chmod: local dirs like favicon/ are 700, which the web server can't enter (404s).
+    # Brand/ stays out except the one wordmark index.html uses.
+    rsync -avz --delete --chmod=D755,F644 \
+      --include '/Brand/' --include '/Brand/brand/' --include '/Brand/brand/wordmark.svg' --exclude '/Brand/**' \
       --exclude .git --exclude .github --exclude .claude --exclude .superpowers --exclude .venv \
-      --exclude Brand --exclude docs --exclude tests \
+      --exclude docs --exclude tests \
       --exclude manage.sh --exclude CHANGELOG.md --exclude .gitignore --exclude '.server.*' \
       ./ "${DEPLOY_TARGET:-dogzrbar@firetailfab.com:/home/dogzrbar/public_html/firetailfab/gridworks/}"
     ;;
