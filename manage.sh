@@ -47,6 +47,9 @@ case "${1:-}" in
     node tests/test_sim.mjs && node tests/test_fx.mjs
     ;;
   deploy)
+    # The target (user@host:/path/) lives in the git-ignored .deploy file or DEPLOY_TARGET, never here.
+    TARGET="${DEPLOY_TARGET:-$(cat .deploy 2>/dev/null || true)}"
+    [ -n "$TARGET" ] || { echo "deploy: put user@host:/path/ in .deploy or set DEPLOY_TARGET" >&2; exit 1; }
     # No build step: the site is the repo root. Ship it as-is, minus dev-only files.
     # --chmod: local dirs like favicon/ are 700, which the web server can't enter (404s).
     # Brand/ stays out except the one wordmark index.html uses.
@@ -55,7 +58,7 @@ case "${1:-}" in
       --exclude .git --exclude .github --exclude .claude --exclude .superpowers --exclude .venv \
       --exclude docs --exclude tests \
       --exclude manage.sh --exclude CHANGELOG.md --exclude .gitignore --exclude '.server.*' \
-      ./ "${DEPLOY_TARGET:-dogzrbar@firetailfab.com:/home/dogzrbar/public_html/firetailfab/gridworks/}"
+      --exclude .deploy ./ "$TARGET"
     ;;
   *)
     echo "usage: $0 {start|stop|restart|status|logs [n]|test|deploy}   (PORT=$PORT, override with PORT=nnnn)"
